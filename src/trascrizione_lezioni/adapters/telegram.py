@@ -9,6 +9,7 @@ in GestoreIngest e Orchestratore, con i fake.
 from __future__ import annotations
 
 import logging
+import shutil
 from pathlib import Path
 
 import httpx
@@ -17,14 +18,26 @@ from ..dominio import Lezione
 from ..ingest import GestoreIngest
 
 LIMITE_MESSAGGIO_TELEGRAM = 4000
+API_BASE_URL_DEFAULT = "https://api.telegram.org"
+PREFISSO_DIR_CONTAINER_LOCALE = "/var/lib/telegram-bot-api"
 
 logger = logging.getLogger(__name__)
 
 
 class ClientTelegramReale:
-    def __init__(self, token: str, admin_chat_id: str, timeout: float = 30.0) -> None:
-        self._base_url = f"https://api.telegram.org/bot{token}"
+    def __init__(
+        self,
+        token: str,
+        admin_chat_id: str,
+        timeout: float = 30.0,
+        api_base_url: str = API_BASE_URL_DEFAULT,
+        cartella_file_locale: Path | None = None,
+    ) -> None:
+        self._api_base_url = api_base_url
+        self._token = token
+        self._base_url = f"{api_base_url}/bot{token}"
         self._admin_chat_id = admin_chat_id
+        self._cartella_file_locale = cartella_file_locale
         self._client = httpx.Client(timeout=timeout)
 
     def invia_appunti(self, lezione: Lezione, percorso_appunti: str) -> None:
@@ -78,11 +91,19 @@ class ClientTelegramReale:
         risposta = self._client.get(f"{self._base_url}/getFile", params={"file_id": file_id})
         risposta.raise_for_status()
         percorso_remoto = risposta.json()["result"]["file_path"]
-        token = self._base_url.rsplit("/bot", 1)[1]
-        url_file = f"https://api.telegram.org/file/bot{token}/{percorso_remoto}"
 
         cartella_destinazione.mkdir(parents=True, exist_ok=True)
         percorso_locale = cartella_destinazione / f"{file_id}-{Path(percorso_remoto).name}"
+
+        if self._cartella_file_locale is not None and percorso_remoto.startswith(
+            PREFISSO_DIR_CONTAINER_LOCALE
+        ):
+            percorso_container_relativo = percorso_remoto[len(PREFISSO_DIR_CONTAINER_LOCALE) :].lstrip("/")
+            percorso_sorgente = self._cartella_file_locale / percorso_container_relativo
+            shutil.copy(percorso_sorgente, percorso_locale)
+            return str(percorso_locale)
+
+        url_file = f"{self._api_base_url}/file/bot{self._token}/{percorso_remoto}"
         with self._client.stream("GET", url_file) as flusso:
             flusso.raise_for_status()
             with percorso_locale.open("wb") as f:
@@ -97,11 +118,12 @@ def esegui_polling(
     gestore_ingest: GestoreIngest,
     token: str,
     cartella_audio: Path,
+    api_base_url: str = API_BASE_URL_DEFAULT,
     offset_iniziale: int = 0,
 ) -> None:
     """Long-polling su getUpdates. Blocca finché il processo non viene fermato."""
 
-    base_url = f"https://api.telegram.org/bot{token}"
+    base_url = f"{api_base_url}/bot{token}"
     http = httpx.Client(timeout=60.0)
     offset = offset_iniziale
 
@@ -155,7 +177,7 @@ def _gestisci_messaggio(
     file_id = file_audio["file_id"]
     try:
         percorso_audio = client.scarica_audio(str(file_id), cartella_audio)
-    except httpx.HTTPError:
+    except (httpx.HTTPError, OSError):
         logger.exception("Download audio fallito per chat_id=%s", chat_id)
         return
 

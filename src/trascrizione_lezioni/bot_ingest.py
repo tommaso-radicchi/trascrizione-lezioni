@@ -12,7 +12,7 @@ import psycopg
 from dotenv import load_dotenv
 
 from .adapters.postgres import RepositoryPostgres
-from .adapters.telegram import ClientTelegramReale, esegui_polling
+from .adapters.telegram import API_BASE_URL_DEFAULT, ClientTelegramReale, esegui_polling
 from .config import carica_materie_correnti
 from .ingest import GestoreIngest
 
@@ -27,13 +27,21 @@ def main() -> None:
     admin_chat_id = _leggi_env_obbligatoria("TELEGRAM_ADMIN_CHAT_ID")
     database_url = _leggi_env_obbligatoria("DATABASE_URL")
     fratello_chat_id = os.environ.get("TELEGRAM_FRATELLO_CHAT_ID") or None
+    api_base_url = os.environ.get("TELEGRAM_API_BASE_URL") or API_BASE_URL_DEFAULT
+    cartella_file_locale_env = os.environ.get("TELEGRAM_LOCAL_FILES_DIR")
+    cartella_file_locale = Path(cartella_file_locale_env) if cartella_file_locale_env else None
 
     materie_correnti = carica_materie_correnti(RADICE_PROGETTO / "config" / "materie.yaml")
     cartella_audio = RADICE_PROGETTO / "audio_in_entrata"
 
     connessione = psycopg.connect(database_url)
     repository = RepositoryPostgres(connessione)
-    client_telegram = ClientTelegramReale(token=token, admin_chat_id=admin_chat_id)
+    client_telegram = ClientTelegramReale(
+        token=token,
+        admin_chat_id=admin_chat_id,
+        api_base_url=api_base_url,
+        cartella_file_locale=cartella_file_locale,
+    )
     gestore_ingest = GestoreIngest(
         repository=repository,
         client_telegram=client_telegram,
@@ -52,6 +60,7 @@ def main() -> None:
         gestore_ingest=gestore_ingest,
         token=token,
         cartella_audio=cartella_audio,
+        api_base_url=api_base_url,
     )
 
 

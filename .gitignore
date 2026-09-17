@@ -8,3 +8,4 @@ __pycache__/
 .env.*
 !.env.example
 audio_in_entrata/
+.telegram-bot-api-data/
