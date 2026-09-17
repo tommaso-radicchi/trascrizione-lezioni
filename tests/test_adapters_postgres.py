@@ -94,3 +94,25 @@ def test_il_testo_della_trascrizione_sopravvive_al_salvataggio_e_al_ricaricament
 
     assert len(trovate) == 1
     assert trovate[0].trascrizione == "questo è il testo trascritto dalla lezione"
+
+
+def test_il_markdown_degli_appunti_sopravvive_al_salvataggio_e_al_ricaricamento(
+    connessione: psycopg.Connection,
+) -> None:
+    repository = RepositoryPostgres(connessione)
+    lezione = Lezione(
+        id="lezione-contratto-4",
+        materia="Economia Aziendale",
+        data=date(2026, 3, 8),
+        percorso_audio="/audio/lezione-contratto-4.ogg",
+        chat_id="fratello-1",
+        stato=Stato.ELABORATA,
+        trascrizione="testo trascritto",
+        appunti_markdown="# Economia Aziendale\n\n## Riassunto\n...",
+    )
+
+    repository.salva(lezione)
+    trovate = repository.da_processare()
+
+    assert len(trovate) == 1
+    assert trovate[0].appunti_markdown == "# Economia Aziendale\n\n## Riassunto\n..."

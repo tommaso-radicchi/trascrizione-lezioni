@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from datetime import date
 
 from ..dominio import Lezione, Stato
 
@@ -28,15 +29,15 @@ class ClientTrascrizioneFake:
 
 
 class ClientAppuntiFake:
-    def __init__(self, comportamento: Callable[[str, str], str] | None = None) -> None:
+    def __init__(self, comportamento: Callable[[str, str, date], str] | None = None) -> None:
         self._comportamento = comportamento or (
-            lambda trascrizione, materia: f"# Appunti di {materia}\n\n{trascrizione}"
+            lambda trascrizione, materia, data: f"# {materia} ({data})\n\n{trascrizione}"
         )
-        self.chiamate: list[tuple[str, str]] = []
+        self.chiamate: list[tuple[str, str, date]] = []
 
-    def genera_appunti(self, trascrizione: str, materia: str) -> str:
-        self.chiamate.append((trascrizione, materia))
-        return self._comportamento(trascrizione, materia)
+    def genera_appunti(self, trascrizione: str, materia: str, data: date) -> str:
+        self.chiamate.append((trascrizione, materia, data))
+        return self._comportamento(trascrizione, materia, data)
 
 
 class ArchivioFake:

@@ -59,7 +59,7 @@ class Orchestratore:
         elif lezione.stato is Stato.TRASCRITTA:
             assert lezione.trascrizione is not None
             lezione.appunti_markdown = self._client_appunti.genera_appunti(
-                lezione.trascrizione, lezione.materia
+                lezione.trascrizione, lezione.materia, lezione.data
             )
             lezione.stato = Stato.ELABORATA
         elif lezione.stato is Stato.ELABORATA:

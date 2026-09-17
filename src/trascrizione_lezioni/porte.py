@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Protocol
 
 from .dominio import Lezione
@@ -16,7 +17,7 @@ class ClientTrascrizione(Protocol):
 
 
 class ClientAppunti(Protocol):
-    def genera_appunti(self, trascrizione: str, materia: str) -> str: ...
+    def genera_appunti(self, trascrizione: str, materia: str, data: date) -> str: ...
 
 
 class Archivio(Protocol):
