@@ -20,6 +20,7 @@ def crea_lezione(id: str = "lezione-1", materia: str = "Analisi 1") -> Lezione:
         materia=materia,
         data=date(2026, 3, 5),
         percorso_audio=f"/audio/{id}.ogg",
+        chat_id="fratello-1",
     )
 
 

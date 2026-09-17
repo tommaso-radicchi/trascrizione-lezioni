@@ -71,9 +71,17 @@ class ClientTelegramFake:
     def __init__(self) -> None:
         self.appunti_inviati: list[tuple[Lezione, str]] = []
         self.errori_notificati: list[tuple[Lezione, str]] = []
+        self.materie_richieste: list[tuple[str, list[str]]] = []
+        self.conferme_inviate: list[str] = []
 
     def invia_appunti(self, lezione: Lezione, percorso_appunti: str) -> None:
         self.appunti_inviati.append((lezione, percorso_appunti))
 
     def notifica_errore(self, lezione: Lezione, messaggio: str) -> None:
         self.errori_notificati.append((lezione, messaggio))
+
+    def chiedi_materia(self, chat_id: str, materie: list[str]) -> None:
+        self.materie_richieste.append((chat_id, materie))
+
+    def conferma_ricezione(self, chat_id: str) -> None:
+        self.conferme_inviate.append(chat_id)

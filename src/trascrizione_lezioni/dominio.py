@@ -24,6 +24,7 @@ class Lezione:
     materia: str
     data: date
     percorso_audio: str
+    chat_id: str
     stato: Stato = Stato.RICEVUTA
     trascrizione: str | None = None
     appunti_markdown: str | None = None
