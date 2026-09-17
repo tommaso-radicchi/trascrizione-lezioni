@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 SOGLIA_UTILIZZO_PERCENTO = 10.0
 SOGLIA_VRAM_LIBERA_MB = 2000.0
 COOLDOWN_WOL_SECONDI = 60.0
+TENTATIVI_SVEGLIA_MASSIMI = 5
 
 
 def costruisci_pacchetto_wol(mac_address: str) -> bytes:
@@ -47,7 +48,9 @@ class ControlloGpuMsi:
         soglia_utilizzo_percento: float = SOGLIA_UTILIZZO_PERCENTO,
         soglia_vram_libera_mb: float = SOGLIA_VRAM_LIBERA_MB,
         cooldown_wol_secondi: float = COOLDOWN_WOL_SECONDI,
+        tentativi_sveglia_massimi: int = TENTATIVI_SVEGLIA_MASSIMI,
         invia_wol_fn: Callable[[str], None] = invia_wol,
+        notifica_irraggiungibile_fn: Callable[[str], None] | None = None,
     ) -> None:
         self._base_url = base_url
         self._mac_address = mac_address
@@ -55,14 +58,21 @@ class ControlloGpuMsi:
         self._soglia_utilizzo_percento = soglia_utilizzo_percento
         self._soglia_vram_libera_mb = soglia_vram_libera_mb
         self._cooldown_wol_secondi = cooldown_wol_secondi
+        self._tentativi_sveglia_massimi = tentativi_sveglia_massimi
         self._invia_wol_fn = invia_wol_fn
+        self._notifica_irraggiungibile_fn = notifica_irraggiungibile_fn
         self._ultimo_wol: float | None = None
+        self._tentativi_sveglia_falliti = 0
+        self._notificato = False
 
     def libera(self) -> bool:
         try:
             risposta = self._client.get(f"{self._base_url}/stato-gpu")
             risposta.raise_for_status()
             dati = risposta.json()
+            self._tentativi_sveglia_falliti = 0
+            self._notificato = False
+            self._ultimo_wol = None
             return bool(
                 dati["utilizzo_percento"] < self._soglia_utilizzo_percento
                 and dati["vram_libera_mb"] > self._soglia_vram_libera_mb
@@ -78,6 +88,17 @@ class ControlloGpuMsi:
         logger.info("MSI non raggiungibile, invio Wake-on-LAN")
         self._invia_wol_fn(self._mac_address)
         self._ultimo_wol = ora
+        self._tentativi_sveglia_falliti += 1
+        self._notifica_se_serve()
+
+    def _notifica_se_serve(self) -> None:
+        if self._notificato or self._tentativi_sveglia_falliti < self._tentativi_sveglia_massimi:
+            return
+        self._notificato = True
+        if self._notifica_irraggiungibile_fn is not None:
+            self._notifica_irraggiungibile_fn(
+                f"MSI non risponde dopo {self._tentativi_sveglia_falliti} tentativi di sveglia via Wake-on-LAN."
+            )
 
 
 class ClientTrascrizioneMsi:

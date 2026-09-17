@@ -71,6 +71,11 @@ class RepositoryPostgres:
                 """
             )
             righe = cursore.fetchall()
+        # rollback, non commit: una SELECT non ha nulla da confermare, e su una
+        # connessione condivisa un commit() qui confermerebbe anche eventuali
+        # scritture pendenti di un chiamante precedente che non le ha ancora
+        # confermate lui stesso.
+        self._connessione.rollback()
         return [_riga_a_lezione(riga) for riga in righe]
 
 

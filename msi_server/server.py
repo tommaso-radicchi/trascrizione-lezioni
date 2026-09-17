@@ -1,10 +1,19 @@
 """Server HTTP nativo per la trascrizione con faster-whisper sulla GPU
 dell'MSI, stesso pattern di Ollama nativo (niente Docker, accesso diretto
 alla GPU). Avviato da avvia_server.bat. Vedi ADR 0002 e issue #4.
+
+Il modello viene caricato e scaricato ad ogni richiesta, non tenuto
+residente in VRAM: un modello caricato a riposo genera un utilizzo GPU
+osservato tra il 20% e il 30% (verificato spegnendo il server: senza
+modello caricato l'utilizzo scende a 0%), che romperebbe il controllo
+di disponibilità GPU lato Mac Mini — pensato per non interferire mai
+con l'uso personale della macchina (ADR 0002). Il costo è qualche
+secondo di ricarica per ogni Lezione, accettabile: non c'è urgenza.
 """
 
 from __future__ import annotations
 
+import gc
 import os
 import shutil
 import subprocess
@@ -18,7 +27,6 @@ MODELLO = os.environ.get("WHISPER_MODEL", "medium")
 LINGUA = os.environ.get("WHISPER_LANGUAGE", "it")
 
 app = FastAPI()
-modello = WhisperModel(MODELLO, device="cuda", compute_type="float16")
 
 
 @app.post("/trascrivi")
@@ -29,8 +37,13 @@ def trascrivi(file: UploadFile) -> dict[str, str]:
         percorso_temp = tmp.name
 
     try:
-        segmenti, _ = modello.transcribe(percorso_temp, language=LINGUA)
-        testo = " ".join(segmento.text.strip() for segmento in segmenti)
+        modello = WhisperModel(MODELLO, device="cuda", compute_type="float16")
+        try:
+            segmenti, _ = modello.transcribe(percorso_temp, language=LINGUA)
+            testo = " ".join(segmento.text.strip() for segmento in segmenti)
+        finally:
+            del modello
+            gc.collect()
     finally:
         os.remove(percorso_temp)
 

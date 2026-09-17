@@ -81,6 +81,91 @@ def test_msi_irraggiungibile_non_reinvia_wol_durante_il_cooldown() -> None:
     assert mac_svegliati == ["D8:43:AE:87:4A:2B"]
 
 
+def test_dopo_troppi_tentativi_di_sveglia_falliti_notifica_una_volta() -> None:
+    def handler(richiesta: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("MSI addormentato", request=richiesta)
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    notifiche: list[str] = []
+    controllo = ControlloGpuMsi(
+        base_url="http://msi.test",
+        mac_address="D8:43:AE:87:4A:2B",
+        client=client,
+        invia_wol_fn=lambda mac: None,
+        cooldown_wol_secondi=0.0,
+        tentativi_sveglia_massimi=3,
+        notifica_irraggiungibile_fn=notifiche.append,
+    )
+
+    for _ in range(5):
+        controllo.libera()
+
+    assert len(notifiche) == 1
+
+
+def test_dopo_la_notifica_se_msi_torna_libera_una_nuova_assenza_notifica_di_nuovo() -> None:
+    stato = {"libera": False}
+
+    def handler(richiesta: httpx.Request) -> httpx.Response:
+        if stato["libera"]:
+            return httpx.Response(200, json={"utilizzo_percento": 0.0, "vram_libera_mb": 5000.0})
+        raise httpx.ConnectError("MSI addormentato", request=richiesta)
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    notifiche: list[str] = []
+    controllo = ControlloGpuMsi(
+        base_url="http://msi.test",
+        mac_address="D8:43:AE:87:4A:2B",
+        client=client,
+        invia_wol_fn=lambda mac: None,
+        cooldown_wol_secondi=0.0,
+        tentativi_sveglia_massimi=2,
+        notifica_irraggiungibile_fn=notifiche.append,
+    )
+
+    controllo.libera()
+    controllo.libera()
+    assert len(notifiche) == 1
+
+    stato["libera"] = True
+    controllo.libera()
+
+    stato["libera"] = False
+    controllo.libera()
+    controllo.libera()
+    assert len(notifiche) == 2
+
+
+def test_dopo_un_ritorno_online_una_nuova_assenza_invia_subito_un_nuovo_wol() -> None:
+    stato = {"libera": False}
+
+    def handler(richiesta: httpx.Request) -> httpx.Response:
+        if stato["libera"]:
+            return httpx.Response(200, json={"utilizzo_percento": 0.0, "vram_libera_mb": 5000.0})
+        raise httpx.ConnectError("MSI addormentato", request=richiesta)
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    mac_svegliati: list[str] = []
+    controllo = ControlloGpuMsi(
+        base_url="http://msi.test",
+        mac_address="D8:43:AE:87:4A:2B",
+        client=client,
+        invia_wol_fn=mac_svegliati.append,
+        cooldown_wol_secondi=999.0,
+    )
+
+    controllo.libera()
+    assert mac_svegliati == ["D8:43:AE:87:4A:2B"]
+
+    stato["libera"] = True
+    controllo.libera()
+
+    stato["libera"] = False
+    controllo.libera()
+
+    assert mac_svegliati == ["D8:43:AE:87:4A:2B", "D8:43:AE:87:4A:2B"]
+
+
 def test_client_trascrizione_msi_carica_laudio_e_restituisce_il_testo(tmp_path: object) -> None:
     from pathlib import Path
 

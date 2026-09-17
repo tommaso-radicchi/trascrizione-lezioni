@@ -34,6 +34,16 @@ def connessione() -> Iterator[psycopg.Connection]:
     conn.close()
 
 
+def test_da_processare_non_lascia_la_connessione_in_transazione_aperta(
+    connessione: psycopg.Connection,
+) -> None:
+    repository = RepositoryPostgres(connessione)
+
+    repository.da_processare()
+
+    assert connessione.info.transaction_status == psycopg.pq.TransactionStatus.IDLE
+
+
 def test_una_lezione_salvata_e_ritrovabile_tra_quelle_da_processare(
     connessione: psycopg.Connection,
 ) -> None:
