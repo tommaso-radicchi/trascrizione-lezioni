@@ -73,3 +73,24 @@ def test_una_lezione_notificata_non_e_tra_quelle_da_processare(
     trovate = repository.da_processare()
 
     assert trovate == []
+
+
+def test_il_testo_della_trascrizione_sopravvive_al_salvataggio_e_al_ricaricamento(
+    connessione: psycopg.Connection,
+) -> None:
+    repository = RepositoryPostgres(connessione)
+    lezione = Lezione(
+        id="lezione-contratto-3",
+        materia="Diritto Pubblico",
+        data=date(2026, 3, 7),
+        percorso_audio="/audio/lezione-contratto-3.ogg",
+        chat_id="fratello-1",
+        stato=Stato.TRASCRITTA,
+        trascrizione="questo è il testo trascritto dalla lezione",
+    )
+
+    repository.salva(lezione)
+    trovate = repository.da_processare()
+
+    assert len(trovate) == 1
+    assert trovate[0].trascrizione == "questo è il testo trascritto dalla lezione"
