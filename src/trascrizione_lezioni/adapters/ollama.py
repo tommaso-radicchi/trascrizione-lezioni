@@ -54,6 +54,43 @@ SCHEMA_APPUNTI: dict[str, Any] = {
 NUM_CTX_DEFAULT = 32768
 
 
+def chiedi_json(
+    client: httpx.Client,
+    *,
+    base_url: str,
+    modello: str,
+    num_ctx: int,
+    schema: dict[str, Any],
+    sistema: str,
+    utente: str,
+) -> dict[str, Any]:
+    """Una chiamata a Ollama con risposta vincolata da JSON Schema. Solleva ValueError
+    se la risposta è vuota o non contiene JSON; gli errori HTTP si propagano."""
+    risposta = client.post(
+        f"{base_url}/api/chat",
+        json={
+            "model": modello,
+            "format": schema,
+            # Ollama locale usa 4096 di default e tronca le trascrizioni lunghe.
+            "options": {"num_ctx": num_ctx},
+            "messages": [
+                {"role": "system", "content": sistema},
+                {"role": "user", "content": utente},
+            ],
+            "stream": False,
+        },
+    )
+    risposta.raise_for_status()
+    dati = risposta.json()
+    contenuto = dati["message"]["content"]
+    if not contenuto.strip():
+        raise ValueError(
+            f"Ollama ha restituito una risposta vuota (done_reason={dati.get('done_reason')}): "
+            "la trascrizione potrebbe superare il contesto del modello"
+        )
+    return estrai_json(contenuto)
+
+
 class ClientAppuntiOllama:
     def __init__(
         self,
@@ -74,35 +111,19 @@ class ClientAppuntiOllama:
         return f"# {materia}\n\n**Data**: {data_leggibile}\n\n{contenuto}"
 
     def _genera_contenuto(self, trascrizione: str, materia: str) -> str:
-        risposta = self._client.post(
-            f"{self._base_url}/api/chat",
-            json={
-                "model": self._modello,
-                "format": SCHEMA_APPUNTI,
-                # Ollama locale usa 4096 di default e tronca le trascrizioni lunghe.
-                "options": {"num_ctx": self._num_ctx},
-                "messages": [
-                    {"role": "system", "content": SISTEMA},
-                    {
-                        "role": "user",
-                        "content": f"Materia: {materia}\n\nTrascrizione:\n{trascrizione}",
-                    },
-                ],
-                "stream": False,
-            },
+        appunti = chiedi_json(
+            self._client,
+            base_url=self._base_url,
+            modello=self._modello,
+            num_ctx=self._num_ctx,
+            schema=SCHEMA_APPUNTI,
+            sistema=SISTEMA,
+            utente=f"Materia: {materia}\n\nTrascrizione:\n{trascrizione}",
         )
-        risposta.raise_for_status()
-        dati = risposta.json()
-        contenuto = dati["message"]["content"]
-        if not contenuto.strip():
-            raise ValueError(
-                f"Ollama ha restituito una risposta vuota (done_reason={dati.get('done_reason')}): "
-                "la trascrizione potrebbe superare il contesto del modello"
-            )
-        return _componi_markdown(_estrai_json(contenuto))
+        return _componi_markdown(appunti)
 
 
-def _estrai_json(contenuto: str) -> dict[str, Any]:
+def estrai_json(contenuto: str) -> dict[str, Any]:
     # I modelli cloud ignorano il parametro `format`: tollera testo o code fence attorno al JSON.
     inizio, fine = contenuto.find("{"), contenuto.rfind("}")
     if inizio == -1 or fine < inizio:

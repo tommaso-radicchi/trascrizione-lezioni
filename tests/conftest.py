@@ -5,6 +5,7 @@ from datetime import date
 from trascrizione_lezioni.adapters.fake import (
     ArchivioFake,
     ClientAppuntiFake,
+    ClientSegmentazioneFake,
     ClientTelegramFake,
     ClientTrascrizioneFake,
     ControlloGpuFake,
@@ -29,13 +30,14 @@ def crea_registrazione(
 
 
 class Ambiente:
-    """Raccoglie l'Orchestratore e i suoi 6 fake, per ispezionarli nei test."""
+    """Raccoglie l'Orchestratore e i suoi 7 fake, per ispezionarli nei test."""
 
     def __init__(
         self,
         *,
         controllo_gpu: ControlloGpuFake | None = None,
         client_trascrizione: ClientTrascrizioneFake | None = None,
+        client_segmentazione: ClientSegmentazioneFake | None = None,
         client_appunti: ClientAppuntiFake | None = None,
         archivio: ArchivioFake | None = None,
         repository: RepositoryFake | None = None,
@@ -43,6 +45,7 @@ class Ambiente:
     ) -> None:
         self.controllo_gpu = controllo_gpu or ControlloGpuFake()
         self.client_trascrizione = client_trascrizione or ClientTrascrizioneFake()
+        self.client_segmentazione = client_segmentazione or ClientSegmentazioneFake()
         self.client_appunti = client_appunti or ClientAppuntiFake()
         self.archivio = archivio or ArchivioFake()
         self.repository = repository or RepositoryFake()
@@ -50,6 +53,7 @@ class Ambiente:
         self.orchestratore = Orchestratore(
             controllo_gpu=self.controllo_gpu,
             client_trascrizione=self.client_trascrizione,
+            client_segmentazione=self.client_segmentazione,
             client_appunti=self.client_appunti,
             archivio=self.archivio,
             repository=self.repository,

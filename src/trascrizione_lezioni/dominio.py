@@ -12,6 +12,7 @@ class Stato(Enum):
 
     RICEVUTA = auto()
     TRASCRITTA = auto()
+    SEGMENTATA = auto()
     ELABORATA = auto()
     ARCHIVIATA = auto()
     NOTIFICATA = auto()
@@ -38,3 +39,27 @@ class Registrazione:
     appunti_markdown: str | None = None
     percorso_appunti: str | None = None
     tentativi: int = 0
+
+
+@dataclass(frozen=True)
+class PropostaCapitolo:
+    """Cosa restituisce il LLM per ogni Capitolo: titolo e prime parole del blocco."""
+
+    titolo: str
+    frase_inizio: str
+
+
+@dataclass(frozen=True)
+class CapitoloTagliato:
+    """Un Capitolo appena tagliato: il testo è un ritaglio esatto della Trascrizione."""
+
+    titolo: str
+    testo: str
+
+
+@dataclass(frozen=True)
+class Capitolo:
+    registrazione_id: str
+    posizione: int
+    titolo: str
+    testo: str

@@ -16,7 +16,7 @@ import pytest
 from dotenv import load_dotenv
 
 from trascrizione_lezioni.adapters.postgres import RepositoryPostgres
-from trascrizione_lezioni.dominio import Lezione, Registrazione, Stato
+from trascrizione_lezioni.dominio import Lezione, Registrazione, Stato, CapitoloTagliato
 
 load_dotenv()
 
@@ -185,3 +185,88 @@ def test_non_possono_esistere_due_lezioni_con_la_stessa_materia_e_giorno(
         repository.salva_lezione(
             Lezione(id="b", materia="Analisi 1", data=date(2026, 3, 5), chat_id="c")
         )
+
+
+def test_i_capitoli_di_una_registrazione_si_salvano_e_si_rileggono_in_ordine(
+    connessione: psycopg.Connection,
+) -> None:
+    repository = RepositoryPostgres(connessione)
+    registrazione = crea_registrazione("reg-cap-1", stato=Stato.SEGMENTATA)
+    salva(repository, registrazione)
+
+    repository.sostituisci_capitoli(
+        registrazione, [CapitoloTagliato("Insiemi", "testo uno."), CapitoloTagliato("Funzioni", "testo due.")]
+    )
+    capitoli = repository.capitoli_della_lezione(registrazione.lezione)
+
+    assert [(c.posizione, c.titolo, c.testo) for c in capitoli] == [
+        (0, "Insiemi", "testo uno."),
+        (1, "Funzioni", "testo due."),
+    ]
+    assert {c.registrazione_id for c in capitoli} == {"reg-cap-1"}
+    assert repository.registrazioni_da_processare()[0].stato is Stato.SEGMENTATA
+
+
+def test_rifare_la_segmentazione_sostituisce_i_capitoli_senza_duplicarli(
+    connessione: psycopg.Connection,
+) -> None:
+    repository = RepositoryPostgres(connessione)
+    registrazione = crea_registrazione("reg-cap-2")
+    salva(repository, registrazione)
+
+    repository.sostituisci_capitoli(registrazione, [CapitoloTagliato("A", "1"), CapitoloTagliato("B", "2")])
+    repository.sostituisci_capitoli(registrazione, [CapitoloTagliato("Unico", "12")])
+
+    capitoli = repository.capitoli_della_lezione(registrazione.lezione)
+    assert [(c.posizione, c.titolo) for c in capitoli] == [(0, "Unico")]
+
+
+def test_i_capitoli_di_una_seconda_registrazione_seguono_quelli_della_prima(
+    connessione: psycopg.Connection,
+) -> None:
+    repository = RepositoryPostgres(connessione)
+    prima = crea_registrazione("reg-prima", lezione_id="lezione-cap")
+    seconda = crea_registrazione("reg-seconda", lezione_id="lezione-cap")
+    repository.salva_lezione(prima.lezione)
+    repository.salva_registrazione(prima)
+    repository.salva_registrazione(seconda)
+
+    # La seconda finisce la segmentazione per prima: l'ordine resta quello di arrivo.
+    repository.sostituisci_capitoli(seconda, [CapitoloTagliato("S1", "s1"), CapitoloTagliato("S2", "s2")])
+    repository.sostituisci_capitoli(prima, [CapitoloTagliato("P1", "p1")])
+    repository.sostituisci_capitoli(prima, [CapitoloTagliato("P1", "p1"), CapitoloTagliato("P2", "p2")])
+
+    capitoli = repository.capitoli_della_lezione(prima.lezione)
+    assert [c.titolo for c in capitoli] == ["P1", "P2", "S1", "S2"]
+
+
+def test_i_capitoli_di_altre_lezioni_non_si_mescolano(
+    connessione: psycopg.Connection,
+) -> None:
+    repository = RepositoryPostgres(connessione)
+    una = crea_registrazione("reg-una", materia="Analisi 1")
+    altra = crea_registrazione("reg-altra", materia="Fisica 1")
+    salva(repository, una)
+    salva(repository, altra)
+    repository.sostituisci_capitoli(una, [CapitoloTagliato("Analisi", "a")])
+    repository.sostituisci_capitoli(altra, [CapitoloTagliato("Fisica", "f")])
+
+    assert [c.titolo for c in repository.capitoli_della_lezione(una.lezione)] == ["Analisi"]
+
+
+def test_una_scrittura_fallita_non_lascia_la_connessione_inutilizzabile(
+    connessione: psycopg.Connection,
+) -> None:
+    repository = RepositoryPostgres(connessione)
+    registrazione = crea_registrazione("reg-rollback")
+    salva(repository, registrazione)
+
+    with pytest.raises(psycopg.errors.NotNullViolation):
+        repository.sostituisci_capitoli(
+            registrazione, [CapitoloTagliato("Valido", "testo"), CapitoloTagliato(None, "x")]  # type: ignore[arg-type]
+        )
+
+    # Il DELETE e il primo INSERT sono stati annullati insieme al resto, e la connessione funziona.
+    assert repository.capitoli_della_lezione(registrazione.lezione) == []
+    repository.sostituisci_capitoli(registrazione, [CapitoloTagliato("Ok", "testo")])
+    assert len(repository.capitoli_della_lezione(registrazione.lezione)) == 1

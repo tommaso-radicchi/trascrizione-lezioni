@@ -1,11 +1,11 @@
-"""Implementazioni finte/in-memory delle 6 porte, per test e per l'harness di sviluppo."""
+"""Implementazioni finte/in-memory delle 7 porte, per test e per l'harness di sviluppo."""
 
 from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import date
 
-from ..dominio import Lezione, Registrazione, Stato
+from ..dominio import Capitolo, Lezione, PropostaCapitolo, Registrazione, Stato, CapitoloTagliato
 
 
 class ControlloGpuFake:
@@ -26,6 +26,22 @@ class ClientTrascrizioneFake:
     def trascrivi(self, percorso_audio: str) -> str:
         self.chiamate.append(percorso_audio)
         return self._comportamento(percorso_audio)
+
+
+class ClientSegmentazioneFake:
+    def __init__(
+        self, comportamento: Callable[[str], list[PropostaCapitolo]] | None = None
+    ) -> None:
+        self._comportamento = comportamento or (
+            lambda trascrizione: [
+                PropostaCapitolo("Capitolo", " ".join(trascrizione.split()[:4]) or "-")
+            ]
+        )
+        self.chiamate: list[str] = []
+
+    def proponi_capitoli(self, trascrizione: str) -> list[PropostaCapitolo]:
+        self.chiamate.append(trascrizione)
+        return self._comportamento(trascrizione)
 
 
 class ClientAppuntiFake:
@@ -54,6 +70,7 @@ class RepositoryFake:
     def __init__(self, registrazioni: list[Registrazione] | None = None) -> None:
         self._lezioni: dict[str, Lezione] = {}
         self._registrazioni: dict[str, Registrazione] = {}
+        self._capitoli: dict[str, list[CapitoloTagliato]] = {}
         for registrazione in registrazioni or []:
             self.salva_registrazione(registrazione)
 
@@ -69,6 +86,19 @@ class RepositoryFake:
     def salva_registrazione(self, registrazione: Registrazione) -> None:
         self._lezioni[registrazione.lezione.id] = registrazione.lezione
         self._registrazioni[registrazione.id] = registrazione
+
+    def sostituisci_capitoli(
+        self, registrazione: Registrazione, capitoli: list[CapitoloTagliato]
+    ) -> None:
+        self._capitoli[registrazione.id] = list(capitoli)
+
+    def capitoli_della_lezione(self, lezione: Lezione) -> list[Capitolo]:
+        return [
+            Capitolo(registrazione.id, posizione, capitolo.titolo, capitolo.testo)
+            for registrazione in self._registrazioni.values()
+            if registrazione.lezione.id == lezione.id
+            for posizione, capitolo in enumerate(self._capitoli.get(registrazione.id, []))
+        ]
 
     def registrazioni_da_processare(self) -> list[Registrazione]:
         return [

@@ -17,6 +17,7 @@ from dotenv import load_dotenv
 from .adapters.archivio import ArchivioFile
 from .adapters.msi import ClientTrascrizioneMsi, ControlloGpuMsi
 from .adapters.ollama import NUM_CTX_DEFAULT, ClientAppuntiOllama
+from .adapters.segmentazione_ollama import SegmentatoreOllama
 from .adapters.postgres import RepositoryPostgres
 from .adapters.telegram import API_BASE_URL_DEFAULT, ClientTelegramReale
 
@@ -58,6 +59,9 @@ def main() -> None:
     orchestratore = Orchestratore(
         controllo_gpu=controllo_gpu,
         client_trascrizione=ClientTrascrizioneMsi(base_url=msi_base_url),
+        client_segmentazione=SegmentatoreOllama(
+            base_url=ollama_base_url, modello=ollama_model, num_ctx=ollama_num_ctx
+        ),
         client_appunti=ClientAppuntiOllama(
             base_url=ollama_base_url, modello=ollama_model, num_ctx=ollama_num_ctx
         ),

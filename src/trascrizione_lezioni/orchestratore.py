@@ -2,19 +2,26 @@
 
 from __future__ import annotations
 
+import logging
+
 from .dominio import Registrazione, Stato
+from .segmentazione import segmenta
 from .porte import (
     Archivio,
     ClientAppunti,
+    ClientSegmentazione,
     ClientTelegram,
     ClientTrascrizione,
     ControlloGpu,
     Repository,
 )
 
+logger = logging.getLogger(__name__)
+
 TENTATIVI_MASSIMI = 2
 
-STATI_CHE_RICHIEDONO_GPU = {Stato.RICEVUTA, Stato.TRASCRITTA}
+# Solo Whisper usa la GPU dell'MSI: segmentazione e appunti vanno su Ollama (Mac Mini).
+STATI_CHE_RICHIEDONO_GPU = {Stato.RICEVUTA}
 
 
 class Orchestratore:
@@ -23,6 +30,7 @@ class Orchestratore:
         *,
         controllo_gpu: ControlloGpu,
         client_trascrizione: ClientTrascrizione,
+        client_segmentazione: ClientSegmentazione,
         client_appunti: ClientAppunti,
         archivio: Archivio,
         repository: Repository,
@@ -30,6 +38,7 @@ class Orchestratore:
     ) -> None:
         self._controllo_gpu = controllo_gpu
         self._client_trascrizione = client_trascrizione
+        self._client_segmentazione = client_segmentazione
         self._client_appunti = client_appunti
         self._archivio = archivio
         self._repository = repository
@@ -61,6 +70,13 @@ class Orchestratore:
             registrazione.stato = Stato.TRASCRITTA
         elif registrazione.stato is Stato.TRASCRITTA:
             assert registrazione.trascrizione is not None
+            risultato = segmenta(registrazione.trascrizione, self._client_segmentazione)
+            self._repository.sostituisci_capitoli(registrazione, risultato.capitoli)
+            if risultato.motivo_ripiego is not None:
+                self._avvisa_ripiego(registrazione, risultato.motivo_ripiego)
+            registrazione.stato = Stato.SEGMENTATA
+        elif registrazione.stato is Stato.SEGMENTATA:
+            assert registrazione.trascrizione is not None
             registrazione.appunti_markdown = self._client_appunti.genera_appunti(
                 registrazione.trascrizione, lezione.materia, lezione.data
             )
@@ -75,6 +91,17 @@ class Orchestratore:
             assert registrazione.percorso_appunti is not None
             self._client_telegram.invia_appunti(lezione, registrazione.percorso_appunti)
             registrazione.stato = Stato.NOTIFICATA
+
+    def _avvisa_ripiego(self, registrazione: Registrazione, motivo: str) -> None:
+        # Best effort: la segmentazione è già riuscita e salvata, un errore dell'avviso non
+        # deve contare come fallimento del passo (rifarebbe anche le chiamate al LLM).
+        try:
+            self._client_telegram.notifica_errore(
+                registrazione.lezione,
+                f"Segmentazione in Capitoli non riuscita, uso un unico Capitolo: {motivo}",
+            )
+        except Exception:
+            logger.exception("Avviso di ripiego della segmentazione non inviato")
 
     def _registra_fallimento(self, registrazione: Registrazione, errore: Exception) -> None:
         registrazione.tentativi += 1
