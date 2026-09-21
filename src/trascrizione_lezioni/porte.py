@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Protocol
 
-from .dominio import Lezione
+from .dominio import Lezione, Registrazione
 
 
 class ControlloGpu(Protocol):
@@ -21,12 +21,16 @@ class ClientAppunti(Protocol):
 
 
 class Archivio(Protocol):
-    def salva(self, lezione: Lezione, appunti_markdown: str) -> str: ...
+    def salva(self, registrazione: Registrazione, appunti_markdown: str) -> str: ...
 
 
 class Repository(Protocol):
-    def salva(self, lezione: Lezione) -> None: ...
-    def da_processare(self) -> list[Lezione]: ...
+    def trova_lezione(self, materia: str, data: date) -> Lezione | None: ...
+    def salva_lezione(self, lezione: Lezione) -> None: ...
+    def salva_registrazione(self, registrazione: Registrazione) -> None: ...
+    def registrazioni_da_processare(self) -> list[Registrazione]:
+        """Le Registrazioni non ancora notificate né in errore, in ordine di arrivo."""
+        ...
 
 
 class ClientTelegram(Protocol):

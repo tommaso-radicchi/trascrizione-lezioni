@@ -1,8 +1,8 @@
-"""Il core dell'Orchestratore: decide il prossimo passo per ogni Lezione in coda."""
+"""Il core dell'Orchestratore: decide il prossimo passo per ogni Registrazione in coda."""
 
 from __future__ import annotations
 
-from .dominio import Lezione, Stato
+from .dominio import Registrazione, Stato
 from .porte import (
     Archivio,
     ClientAppunti,
@@ -36,44 +36,49 @@ class Orchestratore:
         self._client_telegram = client_telegram
 
     def elabora_coda(self) -> None:
-        for lezione in self._repository.da_processare():
-            self._avanza(lezione)
+        for registrazione in self._repository.registrazioni_da_processare():
+            self._avanza(registrazione)
 
-    def _avanza(self, lezione: Lezione) -> None:
-        if lezione.stato in STATI_CHE_RICHIEDONO_GPU and not self._controllo_gpu.libera():
+    def _avanza(self, registrazione: Registrazione) -> None:
+        if registrazione.stato in STATI_CHE_RICHIEDONO_GPU and not self._controllo_gpu.libera():
             return
 
         try:
-            self._esegui_passo(lezione)
+            self._esegui_passo(registrazione)
         except Exception as errore:
-            self._registra_fallimento(lezione, errore)
+            self._registra_fallimento(registrazione, errore)
             return
 
-        lezione.tentativi = 0
-        self._repository.salva(lezione)
+        registrazione.tentativi = 0
+        self._repository.salva_registrazione(registrazione)
 
-    def _esegui_passo(self, lezione: Lezione) -> None:
-        if lezione.stato is Stato.RICEVUTA:
-            lezione.trascrizione = self._client_trascrizione.trascrivi(lezione.percorso_audio)
-            lezione.stato = Stato.TRASCRITTA
-        elif lezione.stato is Stato.TRASCRITTA:
-            assert lezione.trascrizione is not None
-            lezione.appunti_markdown = self._client_appunti.genera_appunti(
-                lezione.trascrizione, lezione.materia, lezione.data
+    def _esegui_passo(self, registrazione: Registrazione) -> None:
+        lezione = registrazione.lezione
+        if registrazione.stato is Stato.RICEVUTA:
+            registrazione.trascrizione = self._client_trascrizione.trascrivi(
+                registrazione.percorso_audio
             )
-            lezione.stato = Stato.ELABORATA
-        elif lezione.stato is Stato.ELABORATA:
-            assert lezione.appunti_markdown is not None
-            lezione.percorso_appunti = self._archivio.salva(lezione, lezione.appunti_markdown)
-            lezione.stato = Stato.ARCHIVIATA
-        elif lezione.stato is Stato.ARCHIVIATA:
-            assert lezione.percorso_appunti is not None
-            self._client_telegram.invia_appunti(lezione, lezione.percorso_appunti)
-            lezione.stato = Stato.NOTIFICATA
+            registrazione.stato = Stato.TRASCRITTA
+        elif registrazione.stato is Stato.TRASCRITTA:
+            assert registrazione.trascrizione is not None
+            registrazione.appunti_markdown = self._client_appunti.genera_appunti(
+                registrazione.trascrizione, lezione.materia, lezione.data
+            )
+            registrazione.stato = Stato.ELABORATA
+        elif registrazione.stato is Stato.ELABORATA:
+            assert registrazione.appunti_markdown is not None
+            registrazione.percorso_appunti = self._archivio.salva(
+                registrazione, registrazione.appunti_markdown
+            )
+            registrazione.stato = Stato.ARCHIVIATA
+        elif registrazione.stato is Stato.ARCHIVIATA:
+            assert registrazione.percorso_appunti is not None
+            self._client_telegram.invia_appunti(lezione, registrazione.percorso_appunti)
+            registrazione.stato = Stato.NOTIFICATA
 
-    def _registra_fallimento(self, lezione: Lezione, errore: Exception) -> None:
-        lezione.tentativi += 1
-        if lezione.tentativi >= TENTATIVI_MASSIMI:
-            lezione.stato = Stato.ERRORE
-            self._client_telegram.notifica_errore(lezione, str(errore))
-        self._repository.salva(lezione)
+    def _registra_fallimento(self, registrazione: Registrazione, errore: Exception) -> None:
+        registrazione.tentativi += 1
+        if registrazione.tentativi >= TENTATIVI_MASSIMI:
+            registrazione.stato = Stato.ERRORE
+            self._client_telegram.notifica_errore(registrazione.lezione, str(errore))
+        self._repository.salva_registrazione(registrazione)

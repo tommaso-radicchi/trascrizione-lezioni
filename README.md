@@ -25,7 +25,7 @@ uv run pytest
 ```
 
 I test del `RepositoryPostgres` (`tests/test_adapters_postgres.py`) girano contro un Postgres
-reale e **svuotano la tabella `lezioni`**. Per questo usano `DATABASE_URL_TEST`, mai
+reale e **svuotano le tabelle `lezioni` e `registrazioni`**. Per questo usano `DATABASE_URL_TEST`, mai
 `DATABASE_URL`: se la variabile manca vengono saltati, e si rifiutano di partire se punta al
 database di produzione o a uno il cui nome non finisce in `_test`.
 

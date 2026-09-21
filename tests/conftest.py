@@ -10,17 +10,21 @@ from trascrizione_lezioni.adapters.fake import (
     ControlloGpuFake,
     RepositoryFake,
 )
-from trascrizione_lezioni.dominio import Lezione
+from trascrizione_lezioni.dominio import Lezione, Registrazione
 from trascrizione_lezioni.orchestratore import Orchestratore
 
 
 def crea_lezione(id: str = "lezione-1", materia: str = "Analisi 1") -> Lezione:
-    return Lezione(
+    return Lezione(id=id, materia=materia, data=date(2026, 3, 5), chat_id="fratello-1")
+
+
+def crea_registrazione(
+    id: str = "registrazione-1", lezione: Lezione | None = None
+) -> Registrazione:
+    return Registrazione(
         id=id,
-        materia=materia,
-        data=date(2026, 3, 5),
+        lezione=lezione or crea_lezione(),
         percorso_audio=f"/audio/{id}.ogg",
-        chat_id="fratello-1",
     )
 
 

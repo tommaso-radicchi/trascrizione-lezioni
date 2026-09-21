@@ -1,6 +1,6 @@
 """Esegue il loop dell'Orchestratore con tutti gli adapter reali: controlla
 la coda a intervalli, dispacciando trascrizione/appunti/archiviazione/notifica
-secondo lo stato di ogni Lezione. Esegui con:
+secondo lo stato di ogni Registrazione. Esegui con:
 uv run python -m trascrizione_lezioni.orchestratore_run
 """
 

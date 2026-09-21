@@ -1,11 +1,12 @@
-"""GestoreIngest: riceve l'audio dal fratello via bot e crea la Lezione."""
+"""GestoreIngest: riceve l'audio dal fratello via bot e crea la Registrazione,
+raggruppandola nella Lezione di quella Materia e di quel giorno."""
 
 from __future__ import annotations
 
 import uuid
 from datetime import date
 
-from .dominio import Lezione, Stato
+from .dominio import Lezione, Registrazione, Stato
 from .porte import ClientTelegram, Repository
 
 
@@ -40,7 +41,7 @@ class GestoreIngest:
         self._audio_in_attesa[chat_id] = percorso_audio
         self._client_telegram.chiedi_materia(chat_id, self._materie_correnti)
 
-    def materia_selezionata(self, *, chat_id: str, materia: str) -> Lezione | None:
+    def materia_selezionata(self, *, chat_id: str, materia: str) -> Registrazione | None:
         if not self._chat_autorizzata(chat_id):
             return None
         if materia not in self._materie_correnti:
@@ -50,14 +51,18 @@ class GestoreIngest:
         if percorso_audio is None:
             return None
 
-        lezione = Lezione(
+        oggi = date.today()
+        lezione = self._repository.trova_lezione(materia, oggi)
+        if lezione is None:
+            lezione = Lezione(id=str(uuid.uuid4()), materia=materia, data=oggi, chat_id=chat_id)
+            self._repository.salva_lezione(lezione)
+
+        registrazione = Registrazione(
             id=str(uuid.uuid4()),
-            materia=materia,
-            data=date.today(),
+            lezione=lezione,
             percorso_audio=percorso_audio,
-            chat_id=chat_id,
             stato=Stato.RICEVUTA,
         )
-        self._repository.salva(lezione)
+        self._repository.salva_registrazione(registrazione)
         self._client_telegram.conferma_ricezione(chat_id)
-        return lezione
+        return registrazione

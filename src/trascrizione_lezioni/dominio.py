@@ -8,7 +8,7 @@ from enum import Enum, auto
 
 
 class Stato(Enum):
-    """Il ciclo di vita di una Lezione, definito in CONTEXT.md."""
+    """Il ciclo di vita di una Registrazione, definito in CONTEXT.md."""
 
     RICEVUTA = auto()
     TRASCRITTA = auto()
@@ -20,11 +20,19 @@ class Stato(Enum):
 
 @dataclass
 class Lezione:
+    """Materia + giorno: raccoglie tutte le Registrazioni della stessa sessione."""
+
     id: str
     materia: str
     data: date
-    percorso_audio: str
     chat_id: str
+
+
+@dataclass
+class Registrazione:
+    id: str
+    lezione: Lezione
+    percorso_audio: str
     stato: Stato = Stato.RICEVUTA
     trascrizione: str | None = None
     appunti_markdown: str | None = None

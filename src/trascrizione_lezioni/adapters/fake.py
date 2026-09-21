@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from datetime import date
 
-from ..dominio import Lezione, Stato
+from ..dominio import Lezione, Registrazione, Stato
 
 
 class ControlloGpuFake:
@@ -44,28 +44,44 @@ class ArchivioFake:
     def __init__(self) -> None:
         self.salvati: dict[str, str] = {}
 
-    def salva(self, lezione: Lezione, appunti_markdown: str) -> str:
-        percorso = f"archivio/{lezione.materia}/{lezione.id}.md"
+    def salva(self, registrazione: Registrazione, appunti_markdown: str) -> str:
+        percorso = f"archivio/{registrazione.lezione.materia}/{registrazione.id}.md"
         self.salvati[percorso] = appunti_markdown
         return percorso
 
 
 class RepositoryFake:
-    def __init__(self, lezioni: list[Lezione] | None = None) -> None:
-        self._lezioni: dict[str, Lezione] = {l.id: l for l in (lezioni or [])}
+    def __init__(self, registrazioni: list[Registrazione] | None = None) -> None:
+        self._lezioni: dict[str, Lezione] = {}
+        self._registrazioni: dict[str, Registrazione] = {}
+        for registrazione in registrazioni or []:
+            self.salva_registrazione(registrazione)
 
-    def salva(self, lezione: Lezione) -> None:
+    def trova_lezione(self, materia: str, data: date) -> Lezione | None:
+        for lezione in self._lezioni.values():
+            if lezione.materia == materia and lezione.data == data:
+                return lezione
+        return None
+
+    def salva_lezione(self, lezione: Lezione) -> None:
         self._lezioni[lezione.id] = lezione
 
-    def da_processare(self) -> list[Lezione]:
+    def salva_registrazione(self, registrazione: Registrazione) -> None:
+        self._lezioni[registrazione.lezione.id] = registrazione.lezione
+        self._registrazioni[registrazione.id] = registrazione
+
+    def registrazioni_da_processare(self) -> list[Registrazione]:
         return [
-            lezione
-            for lezione in self._lezioni.values()
-            if lezione.stato not in (Stato.NOTIFICATA, Stato.ERRORE)
+            registrazione
+            for registrazione in self._registrazioni.values()
+            if registrazione.stato not in (Stato.NOTIFICATA, Stato.ERRORE)
         ]
 
-    def tutte(self) -> list[Lezione]:
+    def lezioni(self) -> list[Lezione]:
         return list(self._lezioni.values())
+
+    def registrazioni(self) -> list[Registrazione]:
+        return list(self._registrazioni.values())
 
 
 class ClientTelegramFake:
