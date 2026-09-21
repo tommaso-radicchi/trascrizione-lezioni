@@ -16,7 +16,15 @@ import pytest
 from dotenv import load_dotenv
 
 from trascrizione_lezioni.adapters.postgres import RepositoryPostgres
-from trascrizione_lezioni.dominio import Lezione, Registrazione, Stato, CapitoloTagliato
+from trascrizione_lezioni.dominio import (
+    AppuntiCapitolo,
+    CapitoloTagliato,
+    Domanda,
+    Lezione,
+    Registrazione,
+    Stato,
+    Termine,
+)
 
 load_dotenv()
 
@@ -123,26 +131,6 @@ def test_il_testo_della_trascrizione_sopravvive_al_salvataggio_e_al_ricaricament
 
     assert len(trovate) == 1
     assert trovate[0].trascrizione == "questo è il testo trascritto"
-
-
-def test_il_markdown_degli_appunti_sopravvive_al_salvataggio_e_al_ricaricamento(
-    connessione: psycopg.Connection,
-) -> None:
-    repository = RepositoryPostgres(connessione)
-
-    salva(
-        repository,
-        crea_registrazione(
-            "reg-4",
-            stato=Stato.ELABORATA,
-            trascrizione="testo trascritto",
-            appunti_markdown="# Economia Aziendale\n\n## Riassunto\n...",
-        ),
-    )
-    trovate = repository.registrazioni_da_processare()
-
-    assert len(trovate) == 1
-    assert trovate[0].appunti_markdown == "# Economia Aziendale\n\n## Riassunto\n..."
 
 
 def test_trova_lezione_ritrova_quella_della_stessa_materia_e_giorno(
@@ -270,3 +258,89 @@ def test_una_scrittura_fallita_non_lascia_la_connessione_inutilizzabile(
     assert repository.capitoli_della_lezione(registrazione.lezione) == []
     repository.sostituisci_capitoli(registrazione, [CapitoloTagliato("Ok", "testo")])
     assert len(repository.capitoli_della_lezione(registrazione.lezione)) == 1
+
+
+APPUNTI = AppuntiCapitolo(
+    riassunto="Si definisce l'insieme.",
+    punti_chiave=["Un insieme è una collezione"],
+    termini=[Termine("Insieme", "Collezione di elementi.")],
+    da_ripassare=["Appartenenza e inclusione"],
+    domande=[Domanda("Che cos'è un insieme?", "Una collezione.")],
+)
+
+
+def test_gli_appunti_di_un_capitolo_sopravvivono_al_salvataggio_e_al_ricaricamento(
+    connessione: psycopg.Connection,
+) -> None:
+    repository = RepositoryPostgres(connessione)
+    registrazione = crea_registrazione("reg-app-1")
+    salva(repository, registrazione)
+    repository.sostituisci_capitoli(
+        registrazione, [CapitoloTagliato("Insiemi", "testo"), CapitoloTagliato("Funzioni", "testo 2")]
+    )
+    primo = repository.capitoli_della_lezione(registrazione.lezione)[0]
+    assert primo.appunti is None
+
+    repository.salva_appunti(primo, APPUNTI)
+    capitoli = repository.capitoli_della_lezione(registrazione.lezione)
+
+    assert capitoli[0].appunti == APPUNTI
+    assert capitoli[1].appunti is None  # gli altri Capitoli non vengono toccati
+
+
+def test_salvare_appunti_di_un_capitolo_inesistente_solleva_errore(
+    connessione: psycopg.Connection,
+) -> None:
+    repository = RepositoryPostgres(connessione)
+    registrazione = crea_registrazione("reg-app-2")
+    salva(repository, registrazione)
+    repository.sostituisci_capitoli(registrazione, [CapitoloTagliato("Insiemi", "testo")])
+    fantasma = repository.capitoli_della_lezione(registrazione.lezione)[0]
+    repository.sostituisci_capitoli(registrazione, [])
+
+    with pytest.raises(LookupError):
+        repository.salva_appunti(fantasma, APPUNTI)
+
+
+def test_rifare_la_segmentazione_elimina_anche_gli_appunti_dei_vecchi_capitoli(
+    connessione: psycopg.Connection,
+) -> None:
+    repository = RepositoryPostgres(connessione)
+    registrazione = crea_registrazione("reg-app-3")
+    salva(repository, registrazione)
+    repository.sostituisci_capitoli(registrazione, [CapitoloTagliato("Vecchio", "testo")])
+    repository.salva_appunti(repository.capitoli_della_lezione(registrazione.lezione)[0], APPUNTI)
+
+    repository.sostituisci_capitoli(registrazione, [CapitoloTagliato("Nuovo", "testo")])
+
+    assert repository.capitoli_della_lezione(registrazione.lezione)[0].appunti is None
+
+
+def test_il_quadro_generale_si_salva_sulla_lezione_e_si_rilegge(
+    connessione: psycopg.Connection,
+) -> None:
+    repository = RepositoryPostgres(connessione)
+    registrazione = crea_registrazione("reg-quadro-1")
+    salva(repository, registrazione)
+
+    repository.salva_quadro_generale(registrazione.lezione, "Una lezione sugli insiemi.")
+
+    rilettura = repository.trova_lezione(registrazione.lezione.materia, registrazione.lezione.data)
+    assert rilettura is not None
+    assert rilettura.quadro_generale == "Una lezione sugli insiemi."
+    da_processare = repository.registrazioni_da_processare()
+    assert da_processare[0].lezione.quadro_generale == "Una lezione sugli insiemi."
+
+
+def test_risalvare_la_lezione_non_cancella_il_quadro_generale(
+    connessione: psycopg.Connection,
+) -> None:
+    repository = RepositoryPostgres(connessione)
+    registrazione = crea_registrazione("reg-quadro-2")
+    salva(repository, registrazione)
+    repository.salva_quadro_generale(registrazione.lezione, "Quadro.")
+
+    repository.salva_lezione(registrazione.lezione)  # copia con quadro_generale ancora None
+
+    rilettura = repository.trova_lezione(registrazione.lezione.materia, registrazione.lezione.data)
+    assert rilettura is not None and rilettura.quadro_generale == "Quadro."

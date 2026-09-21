@@ -5,7 +5,16 @@ from __future__ import annotations
 from collections.abc import Callable
 from datetime import date
 
-from ..dominio import Capitolo, Lezione, PropostaCapitolo, Registrazione, Stato, CapitoloTagliato
+from ..dominio import (
+    AppuntiCapitolo,
+    Capitolo,
+    CapitoloTagliato,
+    Domanda,
+    Lezione,
+    PropostaCapitolo,
+    Registrazione,
+    Stato,
+)
 
 
 class ControlloGpuFake:
@@ -45,23 +54,41 @@ class ClientSegmentazioneFake:
 
 
 class ClientAppuntiFake:
-    def __init__(self, comportamento: Callable[[str, str, date], str] | None = None) -> None:
-        self._comportamento = comportamento or (
-            lambda trascrizione, materia, data: f"# {materia} ({data})\n\n{trascrizione}"
+    def __init__(
+        self,
+        appunti_capitolo: Callable[[str, str, str], AppuntiCapitolo] | None = None,
+        quadro_generale: Callable[[str, date, list[tuple[str, str]]], str] | None = None,
+    ) -> None:
+        self._appunti_capitolo = appunti_capitolo or (
+            lambda titolo, testo, materia: AppuntiCapitolo(
+                riassunto=f"Riassunto di {titolo}.",
+                punti_chiave=[f"Punto chiave di {titolo}"],
+                domande=[Domanda(f"Domanda su {titolo}?", "Risposta breve.")],
+            )
         )
-        self.chiamate: list[tuple[str, str, date]] = []
+        self._quadro_generale = quadro_generale or (
+            lambda materia, data, riassunti: f"Lezione di {materia} su {len(riassunti)} argomenti."
+        )
+        self.chiamate_capitolo: list[tuple[str, str, str]] = []
+        self.chiamate_quadro: list[tuple[str, date, list[tuple[str, str]]]] = []
 
-    def genera_appunti(self, trascrizione: str, materia: str, data: date) -> str:
-        self.chiamate.append((trascrizione, materia, data))
-        return self._comportamento(trascrizione, materia, data)
+    def genera_appunti_capitolo(self, titolo: str, testo: str, materia: str) -> AppuntiCapitolo:
+        self.chiamate_capitolo.append((titolo, testo, materia))
+        return self._appunti_capitolo(titolo, testo, materia)
+
+    def genera_quadro_generale(
+        self, materia: str, data: date, riassunti: list[tuple[str, str]]
+    ) -> str:
+        self.chiamate_quadro.append((materia, data, riassunti))
+        return self._quadro_generale(materia, data, riassunti)
 
 
 class ArchivioFake:
     def __init__(self) -> None:
         self.salvati: dict[str, str] = {}
 
-    def salva(self, registrazione: Registrazione, appunti_markdown: str) -> str:
-        percorso = f"archivio/{registrazione.lezione.materia}/{registrazione.id}.md"
+    def salva(self, lezione: Lezione, appunti_markdown: str) -> str:
+        percorso = f"archivio/{lezione.materia}/{lezione.data.isoformat()}.md"
         self.salvati[percorso] = appunti_markdown
         return percorso
 
@@ -71,6 +98,7 @@ class RepositoryFake:
         self._lezioni: dict[str, Lezione] = {}
         self._registrazioni: dict[str, Registrazione] = {}
         self._capitoli: dict[str, list[CapitoloTagliato]] = {}
+        self._appunti: dict[tuple[str, int], AppuntiCapitolo] = {}
         for registrazione in registrazioni or []:
             self.salva_registrazione(registrazione)
 
@@ -91,10 +119,24 @@ class RepositoryFake:
         self, registrazione: Registrazione, capitoli: list[CapitoloTagliato]
     ) -> None:
         self._capitoli[registrazione.id] = list(capitoli)
+        self._appunti = {k: v for k, v in self._appunti.items() if k[0] != registrazione.id}
+
+    def salva_appunti(self, capitolo: Capitolo, appunti: AppuntiCapitolo) -> None:
+        self._appunti[(capitolo.registrazione_id, capitolo.posizione)] = appunti
+
+    def salva_quadro_generale(self, lezione: Lezione, quadro_generale: str) -> None:
+        # Come su Postgres: scrive sulla Lezione salvata, non sulla copia in mano al chiamante.
+        self._lezioni[lezione.id].quadro_generale = quadro_generale
 
     def capitoli_della_lezione(self, lezione: Lezione) -> list[Capitolo]:
         return [
-            Capitolo(registrazione.id, posizione, capitolo.titolo, capitolo.testo)
+            Capitolo(
+                registrazione.id,
+                posizione,
+                capitolo.titolo,
+                capitolo.testo,
+                self._appunti.get((registrazione.id, posizione)),
+            )
             for registrazione in self._registrazioni.values()
             if registrazione.lezione.id == lezione.id
             for posizione, capitolo in enumerate(self._capitoli.get(registrazione.id, []))

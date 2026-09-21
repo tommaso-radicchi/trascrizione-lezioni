@@ -68,6 +68,8 @@ class SegmentatoreOllama:
                 schema=SCHEMA_SEGMENTAZIONE,
                 sistema=SISTEMA_SEGMENTAZIONE,
                 utente=f"Trascrizione:\n{trascrizione}",
+                # Estrazione, non scrittura: niente casualità nella scelta dei punti di taglio.
+                temperatura=0,
             )
         except ValueError as errore:
             # Risposta vuota, senza JSON o con JSON malformato: il modello ha risposto male.

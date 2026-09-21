@@ -3,12 +3,21 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from trascrizione_lezioni.adapters.fake import (
+    ClientAppuntiFake,
     ClientSegmentazioneFake,
     ClientTelegramFake,
     ClientTrascrizioneFake,
     ControlloGpuFake,
 )
-from trascrizione_lezioni.dominio import Lezione, PropostaCapitolo, Stato
+from trascrizione_lezioni.dominio import (
+    AppuntiCapitolo,
+    Capitolo,
+    CapitoloTagliato,
+    Lezione,
+    PropostaCapitolo,
+    Registrazione,
+    Stato,
+)
 
 from conftest import Ambiente, crea_lezione, crea_registrazione
 
@@ -165,6 +174,10 @@ def test_se_la_segmentazione_fallisce_ripiega_su_un_capitolo_e_avvisa_l_admin() 
     assert "un unico Capitolo" in ambiente.client_telegram.errori_notificati[0][1]
 
 
+def _senza_appunti(capitoli: list[Capitolo]) -> list[tuple[str, int, str, str]]:
+    return [(c.registrazione_id, c.posizione, c.titolo, c.testo) for c in capitoli]
+
+
 def test_una_seconda_registrazione_accoda_i_suoi_capitoli_senza_toccare_i_precedenti() -> None:
     trascrizioni = {
         "/audio/prima.ogg": f"{blocco('a')} {blocco('b')}",
@@ -188,14 +201,14 @@ def test_una_seconda_registrazione_accoda_i_suoi_capitoli_senza_toccare_i_preced
     ambiente.repository.salva_registrazione(prima)
     ambiente.orchestratore.elabora_coda()
     ambiente.orchestratore.elabora_coda()
-    capitoli_dopo_la_prima = ambiente.repository.capitoli_della_lezione(lezione)
+    capitoli_dopo_la_prima = _senza_appunti(ambiente.repository.capitoli_della_lezione(lezione))
 
     ambiente.repository.salva_registrazione(seconda)
     ambiente.orchestratore.elabora_coda()
     ambiente.orchestratore.elabora_coda()
 
     capitoli = ambiente.repository.capitoli_della_lezione(lezione)
-    assert capitoli[: len(capitoli_dopo_la_prima)] == capitoli_dopo_la_prima
+    assert _senza_appunti(capitoli)[: len(capitoli_dopo_la_prima)] == capitoli_dopo_la_prima
     assert [c.registrazione_id for c in capitoli] == ["prima", "prima", "seconda", "seconda"]
     assert [c.titolo for c in capitoli] == ["a 1", "a 2", "c 1", "c 2"]
 
@@ -249,3 +262,145 @@ def test_un_errore_nell_avviso_di_ripiego_non_fa_fallire_la_segmentazione() -> N
     assert registrazione.stato is Stato.SEGMENTATA
     assert registrazione.tentativi == 0
     assert len(ambiente.client_segmentazione.chiamate) == 2  # nessuna ripetizione degli LLM
+
+
+def _registrazione_segmentata(
+    ambiente: Ambiente, id: str, lezione: Lezione, *titoli: str
+) -> Registrazione:
+    registrazione = crea_registrazione(id=id, lezione=lezione)
+    registrazione.stato = Stato.SEGMENTATA
+    registrazione.trascrizione = "testo"
+    ambiente.repository.salva_registrazione(registrazione)
+    ambiente.repository.sostituisci_capitoli(
+        registrazione, [CapitoloTagliato(titolo, f"testo di {titolo}") for titolo in titoli]
+    )
+    return registrazione
+
+
+def test_gli_appunti_si_generano_per_ogni_capitolo_e_poi_il_quadro_generale() -> None:
+    ambiente = Ambiente()
+    lezione = crea_lezione()
+    registrazione = _registrazione_segmentata(ambiente, "r1", lezione, "Insiemi", "Funzioni")
+
+    ambiente.orchestratore.elabora_coda()
+
+    assert registrazione.stato is Stato.ELABORATA
+    assert ambiente.client_appunti.chiamate_capitolo == [
+        ("Insiemi", "testo di Insiemi", "Analisi 1"),
+        ("Funzioni", "testo di Funzioni", "Analisi 1"),
+    ]
+    capitoli = ambiente.repository.capitoli_della_lezione(lezione)
+    assert all(c.appunti is not None for c in capitoli)
+    assert len(ambiente.client_appunti.chiamate_quadro) == 1
+    assert ambiente.client_appunti.chiamate_quadro[0][2] == [
+        ("Insiemi", "Riassunto di Insiemi."),
+        ("Funzioni", "Riassunto di Funzioni."),
+    ]
+    assert lezione.quadro_generale == "Lezione di Analisi 1 su 2 argomenti."
+
+
+def test_una_nuova_registrazione_genera_appunti_solo_per_i_suoi_capitoli_e_ricalcola_il_quadro() -> None:
+    ambiente = Ambiente()
+    lezione = crea_lezione()
+    _registrazione_segmentata(ambiente, "r1", lezione, "Insiemi")
+    ambiente.orchestratore.elabora_coda()  # r1 -> ELABORATA
+    ambiente.client_appunti.chiamate_capitolo.clear()
+
+    _registrazione_segmentata(ambiente, "r2", lezione, "Funzioni")
+    ambiente.orchestratore.elabora_coda()
+
+    assert [c[0] for c in ambiente.client_appunti.chiamate_capitolo] == ["Funzioni"]
+    ultimo_quadro = ambiente.client_appunti.chiamate_quadro[-1]
+    assert [titolo for titolo, _ in ultimo_quadro[2]] == ["Insiemi", "Funzioni"]
+    assert lezione.quadro_generale == "Lezione di Analisi 1 su 2 argomenti."
+
+
+def test_dopo_un_errore_a_meta_i_capitoli_gia_elaborati_non_vengono_rigenerati() -> None:
+    fallisce_su_funzioni = {"attivo": True}
+
+    def appunti(titolo: str, testo: str, materia: str) -> AppuntiCapitolo:
+        if titolo == "Funzioni" and fallisce_su_funzioni["attivo"]:
+            raise RuntimeError("modello non disponibile")
+        return AppuntiCapitolo(riassunto=f"Riassunto di {titolo}.")
+
+    ambiente = Ambiente(client_appunti=ClientAppuntiFake(appunti_capitolo=appunti))
+    lezione = crea_lezione()
+    registrazione = _registrazione_segmentata(ambiente, "r1", lezione, "Insiemi", "Funzioni")
+
+    ambiente.orchestratore.elabora_coda()
+    assert registrazione.stato is Stato.SEGMENTATA
+    assert registrazione.tentativi == 1
+
+    fallisce_su_funzioni["attivo"] = False
+    ambiente.orchestratore.elabora_coda()
+
+    assert ambiente.repository.registrazioni()[0].stato is Stato.ELABORATA
+    titoli_chiamati = [c[0] for c in ambiente.client_appunti.chiamate_capitolo]
+    assert titoli_chiamati == ["Insiemi", "Funzioni", "Funzioni"]  # Insiemi una volta sola
+
+
+def test_l_archiviazione_scrive_un_solo_file_per_lezione_ricomposto_dai_dati() -> None:
+    ambiente = Ambiente()
+    lezione = crea_lezione()
+    r1 = _registrazione_segmentata(ambiente, "r1", lezione, "Insiemi")
+    ambiente.orchestratore.elabora_coda()  # ELABORATA
+    ambiente.orchestratore.elabora_coda()  # ARCHIVIATA
+
+    assert r1.stato is Stato.ARCHIVIATA
+    assert list(ambiente.archivio.salvati) == ["archivio/Analisi 1/2026-03-05.md"]
+    primo = ambiente.archivio.salvati["archivio/Analisi 1/2026-03-05.md"]
+    assert "## 1. Insiemi" in primo
+
+    r2 = _registrazione_segmentata(ambiente, "r2", lezione, "Funzioni")
+    chiamate_prima = len(ambiente.client_appunti.chiamate_capitolo)
+    for _ in range(2):
+        ambiente.orchestratore.elabora_coda()
+
+    assert r2.stato is Stato.ARCHIVIATA
+    assert list(ambiente.archivio.salvati) == ["archivio/Analisi 1/2026-03-05.md"]  # stesso file
+    secondo = ambiente.archivio.salvati["archivio/Analisi 1/2026-03-05.md"]
+    assert "## 1. Insiemi" in secondo and "## 2. Funzioni" in secondo
+    # Archiviare non chiama mai il LLM: solo il passo di elaborazione lo fa.
+    assert len(ambiente.client_appunti.chiamate_capitolo) == chiamate_prima + 1
+    assert r1.percorso_appunti == r2.percorso_appunti
+
+
+def test_il_file_di_una_lezione_non_mostra_i_capitoli_di_una_registrazione_non_ancora_elaborata() -> None:
+    ambiente = Ambiente()
+    lezione = crea_lezione()
+    _registrazione_segmentata(ambiente, "r1", lezione, "Insiemi")
+    ambiente.orchestratore.elabora_coda()  # r1 ELABORATA
+    _registrazione_segmentata(ambiente, "r2", lezione, "Funzioni")  # r2 ancora SEGMENTATA
+
+    ambiente.orchestratore.elabora_coda()  # r1 archiviata mentre r2 viene elaborata
+
+    contenuto = ambiente.archivio.salvati["archivio/Analisi 1/2026-03-05.md"]
+    assert "Insiemi" in contenuto
+    assert "Funzioni" not in contenuto
+
+
+def test_una_registrazione_gia_elaborata_col_vecchio_flusso_riceve_gli_appunti_mancanti_prima_dell_archiviazione() -> None:
+    ambiente = Ambiente()
+    lezione = crea_lezione()
+    registrazione = _registrazione_segmentata(ambiente, "r1", lezione, "Insiemi")
+    registrazione.stato = Stato.ELABORATA  # come dopo il deploy: Capitoli ma niente appunti
+
+    ambiente.orchestratore.elabora_coda()
+
+    assert registrazione.stato is Stato.ARCHIVIATA
+    assert [c[0] for c in ambiente.client_appunti.chiamate_capitolo] == ["Insiemi"]
+    contenuto = ambiente.archivio.salvati["archivio/Analisi 1/2026-03-05.md"]
+    assert "## 1. Insiemi" in contenuto
+
+
+def test_non_si_archivia_mai_un_file_senza_capitoli_elaborati() -> None:
+    ambiente = Ambiente()
+    registrazione = crea_registrazione()
+    registrazione.stato = Stato.ELABORATA  # nessun Capitolo salvato
+    ambiente.repository.salva_registrazione(registrazione)
+
+    ambiente.orchestratore.elabora_coda()
+
+    assert ambiente.archivio.salvati == {}
+    assert registrazione.stato is Stato.ELABORATA
+    assert registrazione.tentativi == 1

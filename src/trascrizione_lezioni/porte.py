@@ -5,7 +5,14 @@ from __future__ import annotations
 from datetime import date
 from typing import Protocol
 
-from .dominio import Capitolo, Lezione, PropostaCapitolo, Registrazione, CapitoloTagliato
+from .dominio import (
+    AppuntiCapitolo,
+    Capitolo,
+    CapitoloTagliato,
+    Lezione,
+    PropostaCapitolo,
+    Registrazione,
+)
 
 
 class ControlloGpu(Protocol):
@@ -23,11 +30,18 @@ class ClientSegmentazione(Protocol):
 
 
 class ClientAppunti(Protocol):
-    def genera_appunti(self, trascrizione: str, materia: str, data: date) -> str: ...
+    def genera_appunti_capitolo(self, titolo: str, testo: str, materia: str) -> AppuntiCapitolo: ...
+    def genera_quadro_generale(
+        self, materia: str, data: date, riassunti: list[tuple[str, str]]
+    ) -> str:
+        """Il quadro generale della Lezione, dai (titolo, riassunto) dei suoi Capitoli."""
+        ...
 
 
 class Archivio(Protocol):
-    def salva(self, registrazione: Registrazione, appunti_markdown: str) -> str: ...
+    def salva(self, lezione: Lezione, appunti_markdown: str) -> str:
+        """Scrive il Markdown della Lezione (un file per Lezione) e ne restituisce il percorso."""
+        ...
 
 
 class Repository(Protocol):
@@ -39,6 +53,8 @@ class Repository(Protocol):
     ) -> None:
         """Salva i Capitoli della Registrazione, sostituendo quelli di un tentativo precedente."""
         ...
+    def salva_appunti(self, capitolo: Capitolo, appunti: AppuntiCapitolo) -> None: ...
+    def salva_quadro_generale(self, lezione: Lezione, quadro_generale: str) -> None: ...
     def capitoli_della_lezione(self, lezione: Lezione) -> list[Capitolo]:
         """Nell'ordine di arrivo delle Registrazioni, poi di posizione nella Registrazione."""
         ...

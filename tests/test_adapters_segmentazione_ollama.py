@@ -28,6 +28,7 @@ def test_proponi_capitoli_manda_la_trascrizione_con_lo_schema_e_restituisce_le_p
         corpo = json.loads(richiesta.content)
         assert corpo["format"]["required"] == ["capitoli"]
         assert corpo["options"]["num_ctx"] == 32768
+        assert corpo["options"]["temperature"] == 0
         assert "gli insiemi sono collezioni" in corpo["messages"][1]["content"]
         risposta = {
             "capitoli": [

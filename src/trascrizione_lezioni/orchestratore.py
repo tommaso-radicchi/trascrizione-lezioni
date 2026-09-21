@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 
 from .dominio import Registrazione, Stato
+from .composizione import componi_markdown
 from .segmentazione import segmenta
 from .porte import (
     Archivio,
@@ -76,21 +77,55 @@ class Orchestratore:
                 self._avvisa_ripiego(registrazione, risultato.motivo_ripiego)
             registrazione.stato = Stato.SEGMENTATA
         elif registrazione.stato is Stato.SEGMENTATA:
-            assert registrazione.trascrizione is not None
-            registrazione.appunti_markdown = self._client_appunti.genera_appunti(
-                registrazione.trascrizione, lezione.materia, lezione.data
-            )
+            self._genera_appunti(registrazione)
             registrazione.stato = Stato.ELABORATA
         elif registrazione.stato is Stato.ELABORATA:
-            assert registrazione.appunti_markdown is not None
-            registrazione.percorso_appunti = self._archivio.salva(
-                registrazione, registrazione.appunti_markdown
-            )
+            registrazione.percorso_appunti = self._archivia(registrazione)
             registrazione.stato = Stato.ARCHIVIATA
         elif registrazione.stato is Stato.ARCHIVIATA:
             assert registrazione.percorso_appunti is not None
             self._client_telegram.invia_appunti(lezione, registrazione.percorso_appunti)
             registrazione.stato = Stato.NOTIFICATA
+
+    def _genera_appunti(self, registrazione: Registrazione) -> None:
+        """Gli Appunti si generano una sola volta per Capitolo: dopo un errore a metà,
+        al tentativo successivo si riprende dai Capitoli che ancora ne sono privi."""
+        lezione = registrazione.lezione
+        for capitolo in self._repository.capitoli_della_lezione(lezione):
+            if capitolo.registrazione_id != registrazione.id or capitolo.appunti is not None:
+                continue
+            appunti = self._client_appunti.genera_appunti_capitolo(
+                capitolo.titolo, capitolo.testo, lezione.materia
+            )
+            self._repository.salva_appunti(capitolo, appunti)
+
+        # Il quadro generale si ricalcola dai soli riassunti di tutti i Capitoli elaborati.
+        riassunti = [
+            (capitolo.titolo, capitolo.appunti.riassunto)
+            for capitolo in self._repository.capitoli_della_lezione(lezione)
+            if capitolo.appunti is not None
+        ]
+        quadro = self._client_appunti.genera_quadro_generale(
+            lezione.materia, lezione.data, riassunti
+        )
+        self._repository.salva_quadro_generale(lezione, quadro)
+
+    def _archivia(self, registrazione: Registrazione) -> str:
+        """Ricompone il file della Lezione dai dati salvati, senza chiamare il LLM
+        (salvo per i Capitoli di questa Registrazione rimasti senza Appunti)."""
+        lezione = registrazione.lezione
+        capitoli = self._repository.capitoli_della_lezione(lezione)
+        if any(c.registrazione_id == registrazione.id and c.appunti is None for c in capitoli):
+            # Una Registrazione elaborata da una versione precedente: si completa.
+            self._genera_appunti(registrazione)
+            capitoli = self._repository.capitoli_della_lezione(lezione)
+        if not any(c.appunti is not None for c in capitoli):
+            # Mai sovrascrivere il file di una Lezione con un documento vuoto.
+            raise RuntimeError("Nessun Capitolo con Appunti da archiviare")
+
+        # Riletta: la copia in mano a questa Registrazione può non avere l'ultimo quadro generale.
+        lezione_aggiornata = self._repository.trova_lezione(lezione.materia, lezione.data) or lezione
+        return self._archivio.salva(lezione_aggiornata, componi_markdown(lezione_aggiornata, capitoli))
 
     def _avvisa_ripiego(self, registrazione: Registrazione, motivo: str) -> None:
         # Best effort: la segmentazione è già riuscita e salvata, un errore dell'avviso non
