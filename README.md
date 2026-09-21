@@ -2,6 +2,22 @@
 
 Vedi `CONTEXT.md` per il glossario di dominio e `docs/adr/` per le decisioni architetturali.
 
+## Ollama (generazione degli Appunti)
+
+Gli Appunti si generano con Ollama **sul Mac Mini** e un modello cloud (`OLLAMA_MODEL`, es.
+`gemma4:31b-cloud`), quindi non dipendono dall'MSI: l'MSI resta acceso on-demand solo per
+Whisper (vedi `docs/adr/0002-elaborazione-on-demand-gpu.md`).
+
+Setup, una volta sola:
+
+```bash
+systemctl enable --now ollama   # servizio sempre attivo
+ollama signin                   # i modelli cloud richiedono l'accesso
+```
+
+In `.env` imposta `OLLAMA_BASE_URL=http://localhost:11434` (vedi `.env.example`). Per
+verificare: `ollama run gemma4:31b-cloud "ok"` deve rispondere senza `Unauthorized`.
+
 ## Test
 
 ```bash
