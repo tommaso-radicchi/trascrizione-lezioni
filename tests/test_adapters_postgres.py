@@ -1,6 +1,9 @@
 """Test di contratto per RepositoryPostgres: gira contro un Postgres reale
 (docker compose up postgres). Fuori dal seam principale dell'Orchestratore,
-per policy dallo spec (vedi issue #1, sezione Testing Decisions)."""
+per policy dallo spec (vedi issue #1, sezione Testing Decisions).
+
+Usa DATABASE_URL_TEST, mai DATABASE_URL: ogni test svuota la tabella `lezioni`,
+quindi deve puntare a un database dedicato (il cui nome finisce in `_test`)."""
 
 from __future__ import annotations
 
@@ -20,14 +23,22 @@ load_dotenv()
 
 @pytest.fixture
 def connessione() -> Iterator[psycopg.Connection]:
-    url = os.environ.get("DATABASE_URL")
+    url = os.environ.get("DATABASE_URL_TEST")
     if not url:
-        pytest.skip("DATABASE_URL non impostata")
+        pytest.skip("DATABASE_URL_TEST non impostata")
     try:
         conn = psycopg.connect(url, connect_timeout=2)
     except psycopg.OperationalError as errore:
         pytest.skip(f"Postgres non raggiungibile: {errore}")
     with conn.cursor() as cursore:
+        cursore.execute("SELECT current_database()")
+        nome_database = cursore.fetchone()[0]  # type: ignore[index]
+        if url == os.environ.get("DATABASE_URL") or not nome_database.endswith("_test"):
+            conn.close()
+            pytest.fail(
+                f"DATABASE_URL_TEST punta a '{nome_database}': rifiuto di svuotarlo. "
+                "Serve un database dedicato il cui nome finisce in '_test'."
+            )
         cursore.execute("TRUNCATE TABLE lezioni")
     conn.commit()
     yield conn

@@ -16,7 +16,7 @@ from dotenv import load_dotenv
 
 from .adapters.archivio import ArchivioFile
 from .adapters.msi import ClientTrascrizioneMsi, ControlloGpuMsi
-from .adapters.ollama import ClientAppuntiOllama
+from .adapters.ollama import NUM_CTX_DEFAULT, ClientAppuntiOllama
 from .adapters.postgres import RepositoryPostgres
 from .adapters.telegram import API_BASE_URL_DEFAULT, ClientTelegramReale
 
@@ -37,6 +37,7 @@ def main() -> None:
     msi_mac_address = _leggi_env_obbligatoria("MSI_MAC_ADDRESS")
     ollama_base_url = _leggi_env_obbligatoria("OLLAMA_BASE_URL")
     ollama_model = _leggi_env_obbligatoria("OLLAMA_MODEL")
+    ollama_num_ctx = int(os.environ.get("OLLAMA_NUM_CTX") or NUM_CTX_DEFAULT)
     api_base_url = os.environ.get("TELEGRAM_API_BASE_URL") or API_BASE_URL_DEFAULT
     cartella_file_locale_env = os.environ.get("TELEGRAM_LOCAL_FILES_DIR")
     cartella_file_locale = Path(cartella_file_locale_env) if cartella_file_locale_env else None
@@ -57,7 +58,9 @@ def main() -> None:
     orchestratore = Orchestratore(
         controllo_gpu=controllo_gpu,
         client_trascrizione=ClientTrascrizioneMsi(base_url=msi_base_url),
-        client_appunti=ClientAppuntiOllama(base_url=ollama_base_url, modello=ollama_model),
+        client_appunti=ClientAppuntiOllama(
+            base_url=ollama_base_url, modello=ollama_model, num_ctx=ollama_num_ctx
+        ),
         archivio=ArchivioFile(cartella_radice=RADICE_PROGETTO / "archivio"),
         repository=repository,
         client_telegram=client_telegram,

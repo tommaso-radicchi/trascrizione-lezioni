@@ -14,6 +14,7 @@ Adapter sottile: non coperto dal seam principale di test."""
 from __future__ import annotations
 
 import json
+import re
 from datetime import date
 from typing import Any
 
@@ -22,7 +23,11 @@ import httpx
 SISTEMA = (
     "Sei un assistente che estrae appunti di studio da una trascrizione di lezione "
     "universitaria in italiano: un riassunto breve (3-5 frasi), i punti chiave, ed "
-    "eventuali termini o definizioni specifiche menzionate (lista vuota se non ce ne sono)."
+    "eventuali termini o definizioni specifiche menzionate (lista vuota se non ce ne sono). "
+    "Rispondi solo con un oggetto JSON con le chiavi \"riassunto\" (stringa), \"punti_chiave\" "
+    "(lista di stringhe) e \"argomenti_e_termini\" (lista di oggetti con \"termine\" e "
+    "\"definizione\"), senza testo prima o dopo. Non usare LaTeX né backslash: scrivi i simboli matematici "
+    "in Unicode (Ω, ∪, ∩, ∈)."
 )
 
 SCHEMA_APPUNTI: dict[str, Any] = {
@@ -46,10 +51,21 @@ SCHEMA_APPUNTI: dict[str, Any] = {
 }
 
 
+NUM_CTX_DEFAULT = 32768
+
+
 class ClientAppuntiOllama:
-    def __init__(self, *, base_url: str, modello: str, client: httpx.Client | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        base_url: str,
+        modello: str,
+        num_ctx: int = NUM_CTX_DEFAULT,
+        client: httpx.Client | None = None,
+    ) -> None:
         self._base_url = base_url
         self._modello = modello
+        self._num_ctx = num_ctx
         self._client = client or httpx.Client(timeout=300.0)
 
     def genera_appunti(self, trascrizione: str, materia: str, data: date) -> str:
@@ -63,6 +79,8 @@ class ClientAppuntiOllama:
             json={
                 "model": self._modello,
                 "format": SCHEMA_APPUNTI,
+                # Ollama locale usa 4096 di default e tronca le trascrizioni lunghe.
+                "options": {"num_ctx": self._num_ctx},
                 "messages": [
                     {"role": "system", "content": SISTEMA},
                     {
@@ -74,8 +92,28 @@ class ClientAppuntiOllama:
             },
         )
         risposta.raise_for_status()
-        appunti = json.loads(risposta.json()["message"]["content"])
-        return _componi_markdown(appunti)
+        dati = risposta.json()
+        contenuto = dati["message"]["content"]
+        if not contenuto.strip():
+            raise ValueError(
+                f"Ollama ha restituito una risposta vuota (done_reason={dati.get('done_reason')}): "
+                "la trascrizione potrebbe superare il contesto del modello"
+            )
+        return _componi_markdown(_estrai_json(contenuto))
+
+
+def _estrai_json(contenuto: str) -> dict[str, Any]:
+    # I modelli cloud ignorano il parametro `format`: tollera testo o code fence attorno al JSON.
+    inizio, fine = contenuto.find("{"), contenuto.rfind("}")
+    if inizio == -1 or fine < inizio:
+        raise ValueError(f"La risposta di Ollama non contiene JSON: {contenuto[:200]!r}")
+    testo_json = contenuto[inizio : fine + 1]
+    try:
+        appunti: dict[str, Any] = json.loads(testo_json)
+    except json.JSONDecodeError:
+        # Backslash isolati (es. LaTeX come \Omega) sono escape JSON non validi: li letteralizza.
+        appunti = json.loads(re.sub(r'\\(?!["\\])', r"\\\\", testo_json))
+    return appunti
 
 
 def _componi_markdown(appunti: dict[str, Any]) -> str:
