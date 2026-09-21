@@ -64,8 +64,11 @@ class Repository(Protocol):
 
 
 class ClientTelegram(Protocol):
-    def notifica_appunti(self, lezione: Lezione, titoli_nuovi: list[str]) -> None:
-        """Avvisa che sono pronti degli Appunti nuovi, con i titoli dei Capitoli aggiunti."""
+    def notifica_appunti(
+        self, lezione: Lezione, titoli_nuovi: list[str], link: str | None
+    ) -> None:
+        """Avvisa che sono pronti degli Appunti nuovi, con i titoli dei Capitoli aggiunti e,
+        se il sito è configurato, il link al primo."""
         ...
     def notifica_errore(self, lezione: Lezione, messaggio: str) -> None: ...
     def chiedi_materia(self, chat_id: str, materie: list[str]) -> None: ...

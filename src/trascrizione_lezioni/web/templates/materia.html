@@ -5,6 +5,7 @@
 <div style="--tinta: {{ materia|colore_materia }}">
   <a class="indietro" href="/">← Studio</a>
   <h1 class="titolo-pagina materia">{{ materia }}</h1>
+  {% include "_sezioni.html" %}
 
   {% if riepilogo.totale %}
     {{ c.barra(riepilogo.contatori) }}
@@ -28,7 +29,7 @@
       <li>
         <a class="capitolo st-{{ capitolo.stato.value }}" href="/capitolo/{{ capitolo.registrazione_id }}/{{ capitolo.posizione }}">
           <span class="numero">{{ capitolo.numero }}</span>
-          <span class="titolo">{{ capitolo.titolo }}</span>
+          <span class="titolo">{{ capitolo.titolo }}{% if capitolo.nuovo %} <span class="nuovo">Nuovo</span>{% endif %}</span>
           {{ c.badge(capitolo.stato) }}
         </a>
       </li>

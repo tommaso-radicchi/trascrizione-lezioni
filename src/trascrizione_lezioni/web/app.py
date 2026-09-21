@@ -23,6 +23,8 @@ from ..studio import (
     barra_segmentata,
     colore_materia,
     da_ripassare,
+    glossario,
+    passaggi_da_ripassare,
     riepilogo_materie,
 )
 
@@ -98,26 +100,53 @@ def crea_app(
             },
         )
 
+    def _materia_esistente(materia: str, ha_lezioni: bool) -> None:
+        if not ha_lezioni and materia not in materie_correnti:
+            raise HTTPException(status_code=404, detail="Materia non trovata")
+
     @app.get("/materia/{materia}", response_class=HTMLResponse)
     def hub_materia(request: Request, materia: str) -> Response:
         with apri_lettura() as lettura:
             lezioni = [l for l in lettura.lezioni() if l.materia == materia]
-        if not lezioni and materia not in materie_correnti:
-            raise HTTPException(status_code=404, detail="Materia non trovata")
+        _materia_esistente(materia, bool(lezioni))
         (riepilogo,) = riepilogo_materie(lezioni, [materia])
         return modelli.TemplateResponse(
             request,
             "materia.html",
             {
                 "materia": materia,
+                "attiva": "lezioni",
                 "riepilogo": riepilogo,
                 "lezioni": sorted(lezioni, key=lambda lezione: lezione.data, reverse=True),
             },
         )
 
+    @app.get("/materia/{materia}/glossario", response_class=HTMLResponse)
+    def glossario_materia(request: Request, materia: str, q: str = "") -> Response:
+        with apri_lettura() as lettura:
+            voci = lettura.appunti_della_materia(materia)
+        _materia_esistente(materia, bool(voci))
+        return modelli.TemplateResponse(
+            request,
+            "glossario.html",
+            {"materia": materia, "attiva": "glossario", "q": q, "voci": glossario(voci, q)},
+        )
+
+    @app.get("/materia/{materia}/da-ripassare", response_class=HTMLResponse)
+    def passaggi_materia(request: Request, materia: str) -> Response:
+        with apri_lettura() as lettura:
+            voci = lettura.appunti_della_materia(materia)
+        _materia_esistente(materia, bool(voci))
+        return modelli.TemplateResponse(
+            request,
+            "passaggi.html",
+            {"materia": materia, "attiva": "da-ripassare", "gruppi": passaggi_da_ripassare(voci)},
+        )
+
     @app.get("/capitolo/{registrazione_id}/{posizione}", response_class=HTMLResponse)
     def capitolo(request: Request, registrazione_id: str, posizione: int) -> Response:
         with apri_lettura() as lettura:
+            lettura.segna_aperto(registrazione_id, posizione)  # da qui in poi non è più "nuovo"
             dettaglio = lettura.dettaglio_capitolo(registrazione_id, posizione)
         if dettaglio is None:
             raise HTTPException(status_code=404, detail="Capitolo non trovato")

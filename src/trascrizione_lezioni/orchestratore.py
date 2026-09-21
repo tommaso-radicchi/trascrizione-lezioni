@@ -7,6 +7,7 @@ import logging
 from .dominio import Registrazione, Stato
 from .composizione import componi_markdown
 from .segmentazione import segmenta
+from .studio import percorso_capitolo
 from .porte import (
     Archivio,
     ClientAppunti,
@@ -36,6 +37,7 @@ class Orchestratore:
         archivio: Archivio,
         repository: Repository,
         client_telegram: ClientTelegram,
+        url_sito: str | None = None,
     ) -> None:
         self._controllo_gpu = controllo_gpu
         self._client_trascrizione = client_trascrizione
@@ -44,6 +46,7 @@ class Orchestratore:
         self._archivio = archivio
         self._repository = repository
         self._client_telegram = client_telegram
+        self._url_sito = url_sito.rstrip("/") if url_sito else None
 
     def elabora_coda(self) -> None:
         for registrazione in self._repository.registrazioni_da_processare():
@@ -83,12 +86,17 @@ class Orchestratore:
             registrazione.percorso_appunti = self._archivia(registrazione)
             registrazione.stato = Stato.ARCHIVIATA
         elif registrazione.stato is Stato.ARCHIVIATA:
-            titoli_nuovi = [
-                capitolo.titolo
+            nuovi = [
+                capitolo
                 for capitolo in self._repository.capitoli_della_lezione(lezione)
                 if capitolo.registrazione_id == registrazione.id
             ]
-            self._client_telegram.notifica_appunti(lezione, titoli_nuovi)
+            link = (
+                self._url_sito + percorso_capitolo(registrazione.id, nuovi[0].posizione)
+                if self._url_sito and nuovi
+                else None
+            )
+            self._client_telegram.notifica_appunti(lezione, [c.titolo for c in nuovi], link)
             registrazione.stato = Stato.NOTIFICATA
 
     def _genera_appunti(self, registrazione: Registrazione) -> None:

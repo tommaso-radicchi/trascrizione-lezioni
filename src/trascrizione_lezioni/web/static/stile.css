@@ -131,9 +131,10 @@ a { color: inherit; }
 
 /* ---------- dashboard ---------- */
 
-.schede { display: grid; gap: 12px; }
+.schede { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
 
 .scheda {
+  min-width: 0;
   background: var(--superficie);
   border: 1px solid var(--bordo);
   border-left: 5px solid var(--accento);
@@ -379,7 +380,7 @@ a { color: inherit; }
 /* ---------- schermi larghi: appunti e trascrizione affiancati ---------- */
 
 @media (min-width: 62rem) {
-  .schede { grid-template-columns: repeat(2, 1fr); }
+  .schede { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .schede-vista { display: none; }
   .pannelli { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 40px; margin-top: 12px; }
   #v-appunti:checked ~ .pannelli .pannello-trascrizione,
@@ -400,4 +401,120 @@ a { color: inherit; }
 
 @media (prefers-reduced-motion: reduce) {
   * { scroll-behavior: auto !important; transition: none !important; }
+}
+
+/* ---------- schede della materia, glossario, passaggi, "nuovo" ---------- */
+
+.sezioni {
+  display: flex;
+  gap: 6px;
+  margin: 14px 0 4px;
+  padding: 4px;
+  border-radius: 12px;
+  background: var(--bordo);
+}
+.sezioni a {
+  flex: 1 1 0;
+  min-width: 0;
+  display: grid;
+  place-items: center;
+  min-height: 44px;
+  padding: 0 4px;
+  font-size: 0.95rem;
+  overflow-wrap: anywhere;
+  border-radius: 9px;
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+}
+.sezioni a[aria-current="page"] {
+  background: var(--superficie);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.18);
+}
+
+.solo-lettori {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.ricerca { display: flex; gap: 8px; margin: 14px 0; }
+.ricerca input {
+  flex: 1;
+  min-width: 0;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 2px solid var(--bordo);
+  border-radius: 12px;
+  background: var(--superficie);
+  color: var(--testo);
+  font: inherit;
+}
+.ricerca input:focus-visible { border-color: var(--accento); outline: none; }
+.ricerca button {
+  min-height: 48px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--accento);
+  color: var(--su-accento);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.glossario { margin: 0; }
+.voce {
+  margin-top: 10px;
+  padding: 12px 16px 6px;
+  background: var(--superficie);
+  border: 1px solid var(--bordo);
+  border-left: 5px solid var(--accento);
+  border-radius: var(--raggio);
+}
+.voce dt { font-weight: 700; font-size: 1.1rem; }
+.voce dd { margin: 8px 0 10px; }
+.voce dd p { margin: 0; }
+.fonte { display: inline-block; margin-top: 2px; font-size: 0.82rem; color: var(--accento); }
+
+.intro { color: var(--testo-2); margin: 14px 0 0; }
+.gruppo-passaggi {
+  margin-top: 14px;
+  padding: 12px 16px 14px;
+  background: var(--superficie);
+  border: 1px solid var(--bordo);
+  border-radius: var(--raggio);
+}
+.gruppo-passaggi h2 { margin: 0; font-size: 1.05rem; }
+.gruppo-passaggi h2 a { text-decoration: none; }
+.gruppo-passaggi .meta { margin: 2px 0 8px; font-size: 0.85rem; color: var(--testo-2); }
+.gruppo-passaggi .evidenza { margin: 0; padding: 0; }
+.gruppo-passaggi .evidenza li + li { margin-top: 6px; }
+
+.nuovo {
+  display: inline-block;
+  padding: 0 0.5em;
+  border-radius: 999px;
+  background: var(--accento);
+  color: var(--su-accento);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  vertical-align: 0.1em;
+}
+.passo { position: relative; }
+.passo.nuovo::after {
+  content: "";
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accento);
+  border: 2px solid var(--sfondo);
 }

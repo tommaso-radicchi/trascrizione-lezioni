@@ -37,3 +37,21 @@ def test_la_notifica_non_contiene_gli_appunti_ne_html() -> None:
 
     assert "<" not in testo
     assert "Riassunto" not in testo
+
+
+def test_con_un_link_la_notifica_lo_mette_in_fondo() -> None:
+    testo = componi_notifica(LEZIONE, ["Insiemi"], link="https://studio.example/capitolo/r1/0")
+
+    assert testo.endswith("\n\n👉 https://studio.example/capitolo/r1/0")
+    assert testo.startswith("📚 Appunti aggiornati: Matematica Generale 21/09")
+
+
+def test_il_link_c_e_anche_senza_titoli() -> None:
+    testo = componi_notifica(LEZIONE, [], link="https://studio.example/x")
+
+    assert testo == "📚 Appunti aggiornati: Matematica Generale 21/09\n\n👉 https://studio.example/x"
+
+
+def test_senza_link_il_testo_non_cambia() -> None:
+    assert componi_notifica(LEZIONE, ["Insiemi"]) == componi_notifica(LEZIONE, ["Insiemi"], link=None)
+    assert "👉" not in componi_notifica(LEZIONE, ["Insiemi"])

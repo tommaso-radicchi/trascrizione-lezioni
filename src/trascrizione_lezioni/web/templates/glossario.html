@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block titolo %}Glossario · {{ materia }}{% endblock %}
+{% block contenuto %}
+<div style="--tinta: {{ materia|colore_materia }}">
+  <a class="indietro" href="/">← Studio</a>
+  <h1 class="titolo-pagina materia">{{ materia }}</h1>
+  {% include "_sezioni.html" %}
+
+  <form class="ricerca" method="get" action="/materia/{{ materia|quota }}/glossario" role="search">
+    <label class="solo-lettori" for="q">Cerca nel glossario</label>
+    <input id="q" name="q" type="search" value="{{ q }}" placeholder="Cerca un termine o una parola…"
+           autocomplete="off" autocapitalize="none" enterkeyhint="search"
+           hx-get="/materia/{{ materia|quota }}/glossario" hx-trigger="input changed delay:300ms, search"
+           hx-target="#voci" hx-select="#voci" hx-swap="outerHTML">
+    <button type="submit">Cerca</button>
+  </form>
+
+  <div id="voci">
+    {% if voci %}
+    <dl class="glossario">
+      {% for v in voci %}
+      <div class="voce">
+        <dt>{{ v.termine }}</dt>
+        {% for d in v.definizioni %}
+        <dd>
+          <p>{{ d.definizione }}</p>
+          <a class="fonte" href="/capitolo/{{ d.capitolo.registrazione_id }}/{{ d.capitolo.posizione }}">{{ d.data|data_completa }} · {{ d.capitolo.titolo }}</a>
+        </dd>
+        {% endfor %}
+      </div>
+      {% endfor %}
+    </dl>
+    {% elif q %}
+    <p class="vuota">Nessun termine per «{{ q }}».</p>
+    {% else %}
+    <p class="vuota">Nessun termine nel glossario ancora.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

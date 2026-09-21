@@ -9,6 +9,7 @@ from trascrizione_lezioni.adapters.fake import (
     ClientTrascrizioneFake,
     ControlloGpuFake,
 )
+from trascrizione_lezioni.orchestratore import Orchestratore
 from trascrizione_lezioni.dominio import (
     AppuntiCapitolo,
     Capitolo,
@@ -443,7 +444,9 @@ def test_la_notifica_parte_solo_dopo_l_archiviazione() -> None:
 
 def test_una_notifica_fallita_viene_ritentata_senza_riarchiviare() -> None:
     class TelegramGiu(ClientTelegramFake):
-        def notifica_appunti(self, lezione: Lezione, titoli: list[str]) -> None:
+        def notifica_appunti(
+            self, lezione: Lezione, titoli: list[str], link: str | None
+        ) -> None:
             raise ConnectionError("Telegram non raggiungibile")
 
     ambiente = Ambiente(client_telegram=TelegramGiu())
@@ -453,3 +456,56 @@ def test_una_notifica_fallita_viene_ritentata_senza_riarchiviare() -> None:
 
     assert ambiente.repository.registrazioni()[0].stato is Stato.ARCHIVIATA
     assert registrazione.tentativi == 1
+
+
+def _ambiente_con_sito(url_sito: str | None) -> Ambiente:
+    ambiente = Ambiente()
+    ambiente.orchestratore = Orchestratore(
+        controllo_gpu=ambiente.controllo_gpu,
+        client_trascrizione=ambiente.client_trascrizione,
+        client_segmentazione=ambiente.client_segmentazione,
+        client_appunti=ambiente.client_appunti,
+        archivio=ambiente.archivio,
+        repository=ambiente.repository,
+        client_telegram=ambiente.client_telegram,
+        url_sito=url_sito,
+    )
+    return ambiente
+
+
+def test_la_notifica_ha_il_link_al_primo_capitolo_della_registrazione() -> None:
+    ambiente = _ambiente_con_sito("https://studio.example")
+    lezione = crea_lezione()
+    _registrazione_segmentata(ambiente, "r1", lezione, "Insiemi", "Funzioni")
+
+    for _ in range(3):
+        ambiente.orchestratore.elabora_coda()
+
+    assert ambiente.client_telegram.link_appunti == ["https://studio.example/capitolo/r1/0"]
+
+
+def test_il_link_della_seconda_registrazione_porta_ai_suoi_capitoli_non_a_quelli_della_prima() -> None:
+    ambiente = _ambiente_con_sito("https://studio.example/")  # la barra finale non raddoppia
+    lezione = crea_lezione()
+    _registrazione_segmentata(ambiente, "r1", lezione, "Insiemi")
+    for _ in range(3):
+        ambiente.orchestratore.elabora_coda()
+    _registrazione_segmentata(ambiente, "r2", lezione, "Limiti", "Derivate")
+    for _ in range(3):
+        ambiente.orchestratore.elabora_coda()
+
+    assert ambiente.client_telegram.link_appunti == [
+        "https://studio.example/capitolo/r1/0",
+        "https://studio.example/capitolo/r2/0",
+    ]
+
+
+def test_senza_indirizzo_del_sito_la_notifica_parte_senza_link() -> None:
+    ambiente = _ambiente_con_sito(None)
+    _registrazione_segmentata(ambiente, "r1", crea_lezione(), "Insiemi")
+
+    for _ in range(3):
+        ambiente.orchestratore.elabora_coda()
+
+    assert ambiente.client_telegram.link_appunti == [None]
+    assert len(ambiente.client_telegram.notifiche_appunti) == 1

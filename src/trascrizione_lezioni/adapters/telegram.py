@@ -40,8 +40,10 @@ class ClientTelegramReale:
         self._cartella_file_locale = cartella_file_locale
         self._client = httpx.Client(timeout=timeout)
 
-    def notifica_appunti(self, lezione: Lezione, titoli_nuovi: list[str]) -> None:
-        self._invia_messaggio(lezione.chat_id, componi_notifica(lezione, titoli_nuovi))
+    def notifica_appunti(
+        self, lezione: Lezione, titoli_nuovi: list[str], link: str | None
+    ) -> None:
+        self._invia_messaggio(lezione.chat_id, componi_notifica(lezione, titoli_nuovi, link))
 
     def notifica_errore(self, lezione: Lezione, messaggio: str) -> None:
         testo = f"⚠️ Errore sulla Lezione di {lezione.materia} del {lezione.data}: {messaggio}"

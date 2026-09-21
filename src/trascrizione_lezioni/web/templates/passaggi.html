@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block titolo %}Da ripassare · {{ materia }}{% endblock %}
+{% block contenuto %}
+<div style="--tinta: {{ materia|colore_materia }}">
+  <a class="indietro" href="/">← Studio</a>
+  <h1 class="titolo-pagina materia">{{ materia }}</h1>
+  {% include "_sezioni.html" %}
+
+  <p class="intro">I passaggi che il docente ha indicato come importanti o richiesti all'esame, dalla lezione più recente.</p>
+
+  {% for g in gruppi %}
+  <section class="gruppo-passaggi">
+    <h2><a href="/capitolo/{{ g.capitolo.registrazione_id }}/{{ g.capitolo.posizione }}">{{ g.capitolo.titolo }}</a></h2>
+    <p class="meta">{{ g.data|data_completa }}</p>
+    <ul class="evidenza">
+      {% for passaggio in g.passaggi %}<li>{{ passaggio }}</li>{% endfor %}
+    </ul>
+  </section>
+  {% else %}
+  <p class="vuota">Nessun passaggio da ripassare indicato finora.</p>
+  {% endfor %}
+</div>
+{% endblock %}

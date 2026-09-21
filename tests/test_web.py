@@ -327,3 +327,204 @@ def test_un_post_dello_stesso_sito_o_senza_intestazione_passa() -> None:
     senza = client.post("/capitolo/r1/0/stato/compreso", follow_redirects=False)
 
     assert stesso.status_code == 303 and senza.status_code == 303
+
+
+# ---------- schede della materia: glossario e da ripassare ----------
+
+from trascrizione_lezioni.studio import percorso_capitolo  # noqa: E402
+
+
+def crea_client_con_appunti() -> tuple[TestClient, LetturaStudioFake]:
+    dettagli = {
+        ("r1", 0): (
+            "t",
+            AppuntiCapitolo(
+                riassunto="R.",
+                termini=[
+                    Termine("Insieme", "Collezione di elementi."),
+                    Termine("Èra", "Un periodo."),
+                ],
+                da_ripassare=["Differenza tra appartenenza e inclusione"],
+            ),
+        ),
+        ("r2", 0): (
+            "t",
+            AppuntiCapitolo(
+                riassunto="R.",
+                termini=[
+                    Termine("insieme", "Oggetto della teoria degli insiemi."),
+                    Termine("Dominio", "L'insieme di partenza."),
+                ],
+                da_ripassare=["Il dominio deve essere non vuoto", "Definizione di limite"],
+            ),
+        ),
+    }
+    return crea_client(dettagli=dettagli)
+
+
+def test_l_hub_ha_le_tre_schede_con_quella_corrente_evidenziata() -> None:
+    client, _ = crea_client()
+
+    html = client.get("/materia/Analisi").text
+
+    nav = html[html.index('class="sezioni"') : html.index("</nav>", html.index('class="sezioni"'))]
+    assert 'href="/materia/Analisi/glossario"' in nav
+    assert 'href="/materia/Analisi/da-ripassare"' in nav
+    assert nav.count('aria-current="page"') == 1
+    assert 'aria-current="page">Lezioni' in nav or 'aria-current="page"' in nav.split("Lezioni")[0]
+
+
+def test_il_glossario_aggrega_i_termini_di_piu_lezioni_in_ordine_alfabetico() -> None:
+    client, _ = crea_client_con_appunti()
+
+    risposta = client.get("/materia/Analisi/glossario")
+
+    assert risposta.status_code == 200
+    html = risposta.text
+    ordine = [html.index(t) for t in ("Dominio", "Èra", "Insieme")]
+    assert ordine == sorted(ordine)
+    # Lo stesso termine in due Lezioni: una voce, due definizioni, ciascuna con la sua fonte.
+    assert html.count("Insieme</dt>") == 1 or html.count(">Insieme<") == 1
+    assert "Collezione di elementi." in html and "Oggetto della teoria degli insiemi." in html
+    assert f'href="{percorso_capitolo("r1", 0)}"' in html
+    assert f'href="{percorso_capitolo("r2", 0)}"' in html
+    assert "01/09/2026" in html and "08/09/2026" in html
+
+
+def test_la_ricerca_nel_glossario_filtra_per_termine_e_definizione() -> None:
+    client, _ = crea_client_con_appunti()
+
+    per_termine = client.get("/materia/Analisi/glossario", params={"q": "domin"}).text
+    per_definizione = client.get("/materia/Analisi/glossario", params={"q": "periodo"}).text
+
+    assert "Dominio" in per_termine and "Èra" not in per_termine
+    assert "Èra" in per_definizione and "Dominio" not in per_definizione
+
+
+def test_una_ricerca_senza_risultati_lo_dice() -> None:
+    client, _ = crea_client_con_appunti()
+
+    html = client.get("/materia/Analisi/glossario", params={"q": "zzz"}).text
+
+    assert "Nessun termine" in html and "zzz" in html
+
+
+def test_il_campo_di_ricerca_funziona_anche_senza_javascript_e_riprende_il_testo() -> None:
+    client, _ = crea_client_con_appunti()
+
+    html = client.get("/materia/Analisi/glossario", params={"q": "domin"}).text
+
+    assert 'method="get"' in html and 'name="q"' in html and 'value="domin"' in html
+
+
+def test_il_glossario_senza_termini_ha_un_messaggio_vuoto() -> None:
+    client, _ = crea_client()  # gli appunti di prova non hanno termini
+
+    assert "Nessun termine" in client.get("/materia/Analisi/glossario").text
+
+
+def test_da_ripassare_raccoglie_i_passaggi_del_docente_per_capitolo_dal_piu_recente() -> None:
+    client, _ = crea_client_con_appunti()
+
+    risposta = client.get("/materia/Analisi/da-ripassare")
+
+    assert risposta.status_code == 200
+    html = risposta.text
+    assert html.index("Definizione di limite") < html.index("Differenza tra appartenenza")
+    assert "Il dominio deve essere non vuoto" in html
+    assert f'href="{percorso_capitolo("r2", 0)}"' in html
+    assert f'href="{percorso_capitolo("r1", 0)}"' in html
+
+
+def test_da_ripassare_senza_passaggi_ha_un_messaggio_vuoto() -> None:
+    client, _ = crea_client()
+
+    assert "Nessun passaggio" in client.get("/materia/Analisi/da-ripassare").text
+
+
+def test_le_schede_di_una_materia_sconosciuta_danno_404() -> None:
+    client, _ = crea_client()
+
+    assert client.get("/materia/Astrologia/glossario").status_code == 404
+    assert client.get("/materia/Astrologia/da-ripassare").status_code == 404
+
+
+def test_una_materia_corrente_senza_lezioni_ha_schede_vuote_ma_esistenti() -> None:
+    client, _ = crea_client(lezioni=[], materie=["Analisi"])
+
+    assert client.get("/materia/Analisi/glossario").status_code == 200
+    assert client.get("/materia/Analisi/da-ripassare").status_code == 200
+
+
+# ---------- indicatore "nuovo" ----------
+
+
+def lezioni_con_nuovi() -> list[LezioneStudio]:
+    return [
+        LezioneStudio(
+            "l1", "Analisi", date(2026, 9, 1), None,
+            [
+                CapitoloStudio("r1", 0, "Insiemi", S.DA_STUDIARE, 1, nuovo=True),
+                CapitoloStudio("r1", 1, "Funzioni", S.DA_STUDIARE, 2, nuovo=False),
+            ],
+        )
+    ]
+
+
+def test_i_capitoli_non_ancora_aperti_hanno_l_indicatore_nuovo_nell_hub() -> None:
+    client, _ = crea_client(lezioni=lezioni_con_nuovi())
+
+    html = client.get("/materia/Analisi").text
+
+    voci = re.findall(r"<li>.*?</li>", html, re.S)
+    riga_insiemi = next(v for v in voci if "Insiemi" in v)
+    riga_funzioni = next(v for v in voci if "Funzioni" in v)
+    assert 'class="nuovo"' in riga_insiemi
+    assert 'class="nuovo"' not in riga_funzioni
+
+
+def test_la_dashboard_conta_i_capitoli_nuovi_della_materia() -> None:
+    client, _ = crea_client(lezioni=lezioni_con_nuovi())
+
+    scheda = client.get("/").text
+    scheda = scheda[scheda.index('data-materia="Analisi"') :]
+    scheda = scheda[: scheda.index("</article>")]
+
+    assert "1 nuovo" in scheda
+
+
+def test_aprire_un_capitolo_lo_toglie_da_nuovo_ovunque() -> None:
+    client, lettura = crea_client(lezioni=lezioni_con_nuovi())
+    assert lettura.lezioni()[0].capitoli[0].nuovo is True
+
+    assert client.get("/capitolo/r1/0").status_code == 200
+
+    assert lettura.lezioni()[0].capitoli[0].nuovo is False
+    assert "1 nuovo" not in client.get("/").text
+    assert 'class="nuovo"' not in client.get("/materia/Analisi").text
+
+
+def test_nella_linea_del_tempo_i_capitoli_nuovi_si_riconoscono() -> None:
+    client, _ = crea_client(lezioni=lezioni_con_nuovi())
+
+    html = client.get("/capitolo/r1/1").text  # apre il secondo: il primo resta nuovo
+
+    timeline = html[html.index('id="timeline"') : html.index("</nav>", html.index('id="timeline"'))]
+    assert "nuovo" in timeline.split("Funzioni")[0]  # nell'etichetta del primo passo
+
+
+def test_cambiare_lo_stato_non_conta_come_aprire_il_capitolo() -> None:
+    client, lettura = crea_client(lezioni=lezioni_con_nuovi())
+
+    client.post("/capitolo/r1/0/stato/compreso", follow_redirects=False)
+
+    assert lettura.lezioni()[0].capitoli[0].nuovo is True
+
+
+def test_il_percorso_di_un_capitolo_apre_la_pagina_giusta() -> None:
+    client, _ = crea_client()
+
+    risposta = client.get(percorso_capitolo("r1", 1))
+
+    assert risposta.status_code == 200
+    assert "Funzioni" in risposta.text

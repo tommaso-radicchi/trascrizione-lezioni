@@ -40,6 +40,7 @@ def main() -> None:
     ollama_model = _leggi_env_obbligatoria("OLLAMA_MODEL")
     ollama_num_ctx = int(os.environ.get("OLLAMA_NUM_CTX") or NUM_CTX_DEFAULT)
     api_base_url = os.environ.get("TELEGRAM_API_BASE_URL") or API_BASE_URL_DEFAULT
+    url_sito = os.environ.get("WEB_BASE_URL") or None
     cartella_file_locale_env = os.environ.get("TELEGRAM_LOCAL_FILES_DIR")
     cartella_file_locale = Path(cartella_file_locale_env) if cartella_file_locale_env else None
 
@@ -68,6 +69,7 @@ def main() -> None:
         archivio=ArchivioFile(cartella_radice=RADICE_PROGETTO / "archivio"),
         repository=repository,
         client_telegram=client_telegram,
+        url_sito=url_sito,
     )
 
     logging.info("Orchestratore avviato, un ciclo ogni %ss...", INTERVALLO_SECONDI)

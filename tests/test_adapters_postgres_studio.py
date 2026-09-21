@@ -163,3 +163,62 @@ def test_il_dettaglio_riguarda_solo_la_lezione_del_capitolo(
     assert dettaglio is not None
     assert dettaglio.lezione.id == "l-f"
     assert [c.titolo for c in dettaglio.lezione.capitoli] == ["F1"]
+
+
+def test_un_capitolo_e_nuovo_finche_non_viene_aperto(connessione: psycopg.Connection) -> None:
+    repository = RepositoryPostgres(connessione)
+    crea(repository, "r1", "Insiemi", "Funzioni")
+    lettura = LetturaStudioPostgres(connessione)
+    assert [c.nuovo for c in lettura.lezioni()[0].capitoli] == [True, True]
+
+    lettura.segna_aperto("r1", 0)
+
+    assert [c.nuovo for c in lettura.lezioni()[0].capitoli] == [False, True]
+    dettaglio = lettura.dettaglio_capitolo("r1", 0)
+    assert dettaglio is not None and dettaglio.capitolo.nuovo is False
+
+
+def test_aprire_di_nuovo_un_capitolo_non_cambia_nulla_e_uno_inesistente_non_da_errore(
+    connessione: psycopg.Connection,
+) -> None:
+    repository = RepositoryPostgres(connessione)
+    crea(repository, "r1", "Insiemi")
+    lettura = LetturaStudioPostgres(connessione)
+
+    lettura.segna_aperto("r1", 0)
+    lettura.segna_aperto("r1", 0)
+    lettura.segna_aperto("nessuna", 9)
+
+    assert [c.nuovo for c in lettura.lezioni()[0].capitoli] == [False]
+
+
+def test_un_capitolo_rielaborato_torna_nuovo(connessione: psycopg.Connection) -> None:
+    repository = RepositoryPostgres(connessione)
+    registrazione = crea(repository, "r1", "Insiemi")
+    lettura = LetturaStudioPostgres(connessione)
+    lettura.segna_aperto("r1", 0)
+
+    repository.sostituisci_capitoli(registrazione, [CapitoloTagliato("Insiemi", "testo")])
+    repository.salva_appunti(repository.capitoli_della_lezione(registrazione.lezione)[0], APPUNTI)
+
+    assert lettura.lezioni()[0].capitoli[0].nuovo is True
+
+
+def test_gli_appunti_della_materia_raccolgono_i_capitoli_di_piu_lezioni_dal_piu_vecchio(
+    connessione: psycopg.Connection,
+) -> None:
+    repository = RepositoryPostgres(connessione)
+    crea(repository, "r-b", "B1", lezione=Lezione("l-b", "Analisi 1", date(2026, 3, 9), "c"))
+    crea(repository, "r-a", "A1", "A2", lezione=Lezione("l-a", "Analisi 1", date(2026, 3, 2), "c"))
+    crea(repository, "r-f", "F1", lezione=Lezione("l-f", "Fisica 1", date(2026, 3, 5), "c"))
+    crea(repository, "r-n", "Nessun appunto", lezione=Lezione("l-n", "Analisi 1", date(2026, 3, 12), "c"), con_appunti=False)
+
+    voci = LetturaStudioPostgres(connessione).appunti_della_materia("Analisi 1")
+
+    assert [(v.data, v.capitolo.titolo) for v in voci] == [
+        (date(2026, 3, 2), "A1"),
+        (date(2026, 3, 2), "A2"),
+        (date(2026, 3, 9), "B1"),
+    ]
+    assert voci[0].appunti == APPUNTI
+    assert LetturaStudioPostgres(connessione).appunti_della_materia("Storia") == []

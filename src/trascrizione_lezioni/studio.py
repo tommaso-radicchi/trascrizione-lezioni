@@ -4,6 +4,7 @@ dashboard. Solo logica pura: i dati arrivano dalla porta `LetturaStudio`."""
 
 from __future__ import annotations
 
+import unicodedata
 import zlib
 from dataclasses import dataclass
 from datetime import date
@@ -34,6 +35,7 @@ class CapitoloStudio:
     titolo: str
     stato: StatoComprensione
     numero: int  # posizione 1-based dentro la Lezione, come nel Markdown in archivio
+    nuovo: bool = False  # non ancora aperto dal fratello
 
 
 @dataclass(frozen=True)
@@ -63,11 +65,46 @@ class LetturaStudio(Protocol):
         self, registrazione_id: str, posizione: int
     ) -> DettaglioCapitolo | None: ...
 
+    def appunti_della_materia(self, materia: str) -> list[CapitoloConAppunti]:
+        """Tutti i Capitoli elaborati della Materia con i loro Appunti, dal più vecchio."""
+        ...
+
+    def segna_aperto(self, registrazione_id: str, posizione: int) -> None:
+        """Il fratello ha aperto il Capitolo: non è più nuovo."""
+        ...
+
     def imposta_stato(
         self, registrazione_id: str, posizione: int, stato: StatoComprensione
     ) -> bool:
         """False se il Capitolo non esiste o non è ancora visibile (senza Appunti)."""
         ...
+
+
+@dataclass(frozen=True)
+class CapitoloConAppunti:
+    data: date
+    capitolo: CapitoloStudio
+    appunti: AppuntiCapitolo
+
+
+@dataclass(frozen=True)
+class Definizione:
+    definizione: str
+    data: date
+    capitolo: CapitoloStudio
+
+
+@dataclass(frozen=True)
+class VoceGlossario:
+    termine: str
+    definizioni: list[Definizione]
+
+
+@dataclass(frozen=True)
+class PassaggiCapitolo:
+    data: date
+    capitolo: CapitoloStudio
+    passaggi: list[str]
 
 
 @dataclass(frozen=True)
@@ -77,6 +114,7 @@ class RiepilogoMateria:
     totale: int
     ultima_lezione: date | None
     continua: CapitoloStudio | None
+    nuovi: int = 0
 
 
 @dataclass(frozen=True)
@@ -113,6 +151,7 @@ def _riepilogo(materia: str, lezioni: list[LezioneStudio]) -> RiepilogoMateria:
         totale=len(capitoli),
         ultima_lezione=cronologiche[-1].data if cronologiche else None,
         continua=next((c for c in capitoli if c.stato is not StatoComprensione.COMPRESO), None),
+        nuovi=sum(1 for c in capitoli if c.nuovo),
     )
 
 
@@ -150,3 +189,49 @@ def colore_materia(materia: str, materie_correnti: list[str] | tuple[str, ...] =
     if materia in materie_correnti:
         return TINTE[list(materie_correnti).index(materia) % len(TINTE)]
     return TINTE[zlib.crc32(materia.encode("utf-8")) % len(TINTE)]
+
+
+def percorso_capitolo(registrazione_id: str, posizione: int) -> str:
+    """L'indirizzo (relativo al sito) della pagina di lettura di un Capitolo."""
+    return f"/capitolo/{registrazione_id}/{posizione}"
+
+
+def chiave_ricerca(testo: str) -> str:
+    """Per ordinare e cercare senza badare a maiuscole, accenti e spazi doppi."""
+    scomposto = unicodedata.normalize("NFKD", testo)
+    senza_accenti = "".join(c for c in scomposto if not unicodedata.combining(c))
+    return " ".join(senza_accenti.casefold().split())
+
+
+def glossario(voci: list[CapitoloConAppunti], ricerca: str = "") -> list[VoceGlossario]:
+    """I termini di tutti i Capitoli in ordine alfabetico. Lo stesso termine in Lezioni
+    diverse è una sola voce con più definizioni, ciascuna con la sua fonte."""
+    raggruppati: dict[str, VoceGlossario] = {}
+    for voce in sorted(voci, key=lambda v: (v.data, v.capitolo.numero)):
+        for termine in voce.appunti.termini:
+            chiave = chiave_ricerca(termine.termine)
+            if not chiave:
+                continue
+            definizione = Definizione(termine.definizione, voce.data, voce.capitolo)
+            if chiave in raggruppati:
+                raggruppati[chiave].definizioni.append(definizione)
+            else:
+                raggruppati[chiave] = VoceGlossario(termine.termine, [definizione])
+
+    cercato = chiave_ricerca(ricerca)
+    return [
+        raggruppati[chiave]
+        for chiave in sorted(raggruppati)
+        if not cercato
+        or cercato in chiave
+        or any(cercato in chiave_ricerca(d.definizione) for d in raggruppati[chiave].definizioni)
+    ]
+
+
+def passaggi_da_ripassare(voci: list[CapitoloConAppunti]) -> list[PassaggiCapitolo]:
+    """I passaggi che il docente ha indicato come importanti, per Capitolo, dal più recente."""
+    return [
+        PassaggiCapitolo(v.data, v.capitolo, list(v.appunti.da_ripassare))
+        for v in sorted(voci, key=lambda v: (-v.data.toordinal(), v.capitolo.numero))
+        if v.appunti.da_ripassare
+    ]

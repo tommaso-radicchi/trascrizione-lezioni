@@ -17,7 +17,7 @@ from ..dominio import (
     Stato,
     StatoComprensione,
 )
-from ..studio import DettaglioCapitolo, LezioneStudio
+from ..studio import CapitoloConAppunti, DettaglioCapitolo, LezioneStudio
 
 
 class ControlloGpuFake:
@@ -162,12 +162,16 @@ class RepositoryFake:
 class ClientTelegramFake:
     def __init__(self) -> None:
         self.notifiche_appunti: list[tuple[Lezione, list[str]]] = []
+        self.link_appunti: list[str | None] = []
         self.errori_notificati: list[tuple[Lezione, str]] = []
         self.materie_richieste: list[tuple[str, list[str]]] = []
         self.conferme_inviate: list[str] = []
 
-    def notifica_appunti(self, lezione: Lezione, titoli_nuovi: list[str]) -> None:
+    def notifica_appunti(
+        self, lezione: Lezione, titoli_nuovi: list[str], link: str | None
+    ) -> None:
         self.notifiche_appunti.append((lezione, list(titoli_nuovi)))
+        self.link_appunti.append(link)
 
     def notifica_errore(self, lezione: Lezione, messaggio: str) -> None:
         self.errori_notificati.append((lezione, messaggio))
@@ -206,6 +210,27 @@ class LetturaStudioFake:
                     )
                     return DettaglioCapitolo(lezione, capitolo, testo, appunti)
         return None
+
+    def appunti_della_materia(self, materia: str) -> list[CapitoloConAppunti]:
+        return [
+            CapitoloConAppunti(
+                lezione.data,
+                capitolo,
+                self._dettagli.get(
+                    (capitolo.registrazione_id, capitolo.posizione),
+                    ("", AppuntiCapitolo(riassunto=capitolo.titolo)),
+                )[1],
+            )
+            for lezione in self.lezioni()
+            if lezione.materia == materia
+            for capitolo in lezione.capitoli
+        ]
+
+    def segna_aperto(self, registrazione_id: str, posizione: int) -> None:
+        for lezione in self._lezioni:
+            for indice, capitolo in enumerate(lezione.capitoli):
+                if capitolo.registrazione_id == registrazione_id and capitolo.posizione == posizione:
+                    lezione.capitoli[indice] = replace(capitolo, nuovo=False)
 
     def imposta_stato(
         self, registrazione_id: str, posizione: int, stato: StatoComprensione

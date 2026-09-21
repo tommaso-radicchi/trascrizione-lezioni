@@ -35,6 +35,9 @@ tailscale serve --bg 8000
 tailscale serve status        # mostra l'indirizzo https://<macchina>.<tailnet>.ts.net
 ```
 
+Per avere il link al primo Capitolo nelle notifiche Telegram, metti in `.env` l'indirizzo che mostra
+`tailscale serve status` come `WEB_BASE_URL` (senza, le notifiche escono senza link).
+
 Sull'iPhone: installa l'app Tailscale, accedi con lo stesso account (o accetta l'invito a
 condividere il Mac Mini), apri l'indirizzo in Safari e usa "Aggiungi alla schermata Home".
 

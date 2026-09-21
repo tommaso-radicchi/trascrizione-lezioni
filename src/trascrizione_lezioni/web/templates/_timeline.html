@@ -2,9 +2,9 @@
   <ol>
     {% for c in d.lezione.capitoli %}
     <li>
-      <a class="passo st-{{ c.stato.value }}" href="/capitolo/{{ c.registrazione_id }}/{{ c.posizione }}"
+      <a class="passo st-{{ c.stato.value }}{% if c.nuovo %} nuovo{% endif %}" href="/capitolo/{{ c.registrazione_id }}/{{ c.posizione }}"
          {% if c.numero == d.capitolo.numero %}aria-current="page"{% endif %}
-         aria-label="Capitolo {{ c.numero }}: {{ c.titolo }} ({{ ETICHETTE_STATO[c.stato][0] }})">
+         aria-label="Capitolo {{ c.numero }}: {{ c.titolo }} ({{ ETICHETTE_STATO[c.stato][0] }}){% if c.nuovo %}, nuovo{% endif %}">
         <span aria-hidden="true">{{ c.numero }}</span>
       </a>
     </li>

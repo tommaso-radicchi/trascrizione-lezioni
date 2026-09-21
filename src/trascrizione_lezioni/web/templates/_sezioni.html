@@ -1,0 +1,5 @@
+<nav class="sezioni" aria-label="Sezioni della materia">
+  <a href="/materia/{{ materia|quota }}"{% if attiva == "lezioni" %} aria-current="page"{% endif %}>Lezioni</a>
+  <a href="/materia/{{ materia|quota }}/glossario"{% if attiva == "glossario" %} aria-current="page"{% endif %}>Glossario</a>
+  <a href="/materia/{{ materia|quota }}/da-ripassare"{% if attiva == "da-ripassare" %} aria-current="page"{% endif %}>Da ripassare</a>
+</nav>
