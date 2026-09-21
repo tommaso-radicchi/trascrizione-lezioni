@@ -38,6 +38,20 @@ tailscale serve status        # mostra l'indirizzo https://<macchina>.<tailnet>.
 Sull'iPhone: installa l'app Tailscale, accedi con lo stesso account (o accetta l'invito a
 condividere il Mac Mini), apri l'indirizzo in Safari e usa "Aggiungi alla schermata Home".
 
+## Rielaborare una Lezione
+
+Dopo un cambio di formato o di prompt, o per una Lezione elaborata dal flusso vecchio:
+
+```bash
+uv run python -m trascrizione_lezioni.rielabora "Matematica Generale" 2026-09-21
+```
+
+Riporta le Registrazioni della Lezione a "trascritta" (le Trascrizioni si conservano) e
+l'Orchestratore in esecuzione rifà segmentazione, Appunti, archiviazione e notifica. Si
+rifiuta se la Lezione è ancora in lavorazione, o se il fratello ha già scelto lo stato di
+comprensione dei Capitoli (si perderebbe): `--forza` per procedere comunque. Il file della
+Lezione in `archivio/` si riscrive; i file vecchi con l'id nel nome vanno tolti a mano.
+
 ## Test
 
 ```bash

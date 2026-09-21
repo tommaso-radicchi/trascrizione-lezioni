@@ -12,7 +12,7 @@ from datetime import date
 import psycopg
 import pytest
 
-from trascrizione_lezioni.adapters.postgres import RepositoryPostgres
+from trascrizione_lezioni.adapters.postgres import ElaborazioneInCorso, RepositoryPostgres
 from trascrizione_lezioni.dominio import (
     AppuntiCapitolo,
     CapitoloTagliato,
@@ -314,3 +314,135 @@ def test_risalvare_la_lezione_non_cancella_il_quadro_generale(
 
     rilettura = repository.trova_lezione(registrazione.lezione.materia, registrazione.lezione.data)
     assert rilettura is not None and rilettura.quadro_generale == "Quadro."
+
+
+def _lezione_elaborata(repository: RepositoryPostgres, lezione_id: str, *registrazioni: str) -> Lezione:
+    lezione = Lezione(lezione_id, "Analisi 1", date(2026, 3, 5), "fratello-1")
+    repository.salva_lezione(lezione)
+    repository.salva_quadro_generale(lezione, "Un quadro generale.")
+    for id_ in registrazioni:
+        registrazione = Registrazione(
+            id_,
+            lezione,
+            f"/audio/{id_}.ogg",
+            stato=Stato.NOTIFICATA,
+            trascrizione=f"trascrizione di {id_}",
+            percorso_appunti="/archivio/vecchio.md",
+            tentativi=1,
+        )
+        repository.salva_registrazione(registrazione)
+        repository.sostituisci_capitoli(registrazione, [CapitoloTagliato("Titolo", "testo")])
+        repository.salva_appunti(
+            repository.capitoli_della_lezione(lezione)[-1], AppuntiCapitolo(riassunto="Vecchio.")
+        )
+    return lezione
+
+
+def test_riavviare_l_elaborazione_riporta_le_registrazioni_a_trascritta_senza_capitoli(
+    connessione: psycopg.Connection,
+) -> None:
+    repository = RepositoryPostgres(connessione)
+    lezione = _lezione_elaborata(repository, "l1", "r1", "r2")
+
+    riavviate = repository.riavvia_elaborazione(lezione)
+
+    assert riavviate == 2
+    da_fare = repository.registrazioni_da_processare()
+    assert [(r.id, r.stato, r.tentativi, r.percorso_appunti) for r in da_fare] == [
+        ("r1", Stato.TRASCRITTA, 0, None),
+        ("r2", Stato.TRASCRITTA, 0, None),
+    ]
+    assert da_fare[0].trascrizione == "trascrizione di r1"  # la trascrizione si conserva
+    assert repository.capitoli_della_lezione(lezione) == []
+    riletta = repository.trova_lezione(lezione.materia, lezione.data)
+    assert riletta is not None and riletta.quadro_generale is None
+
+
+def test_riavviare_non_tocca_registrazioni_senza_trascrizione_ne_altre_lezioni(
+    connessione: psycopg.Connection,
+) -> None:
+    repository = RepositoryPostgres(connessione)
+    lezione = _lezione_elaborata(repository, "l1", "r1")
+    ricevuta = Registrazione("r-nuova", lezione, "/audio/nuova.ogg")  # ancora da trascrivere
+    repository.salva_registrazione(ricevuta)
+    altra = Lezione("l2", "Fisica 1", date(2026, 3, 6), "c")
+    repository.salva_lezione(altra)
+    repository.salva_registrazione(
+        Registrazione("r-altra", altra, "/a.ogg", stato=Stato.NOTIFICATA, trascrizione="t")
+    )
+
+    assert repository.riavvia_elaborazione(lezione) == 1
+
+    stati = {r.id: r.stato for r in repository.registrazioni_da_processare()}
+    assert stati == {"r1": Stato.TRASCRITTA, "r-nuova": Stato.RICEVUTA}  # r-altra resta notificata
+
+
+def test_riavviare_una_lezione_senza_registrazioni_trascritte_restituisce_zero(
+    connessione: psycopg.Connection,
+) -> None:
+    repository = RepositoryPostgres(connessione)
+    lezione = Lezione("l1", "Analisi 1", date(2026, 3, 5), "c")
+    repository.salva_lezione(lezione)
+
+    assert repository.riavvia_elaborazione(lezione) == 0
+
+
+def test_riavviare_senza_registrazioni_trascritte_non_cancella_il_quadro_generale(
+    connessione: psycopg.Connection,
+) -> None:
+    repository = RepositoryPostgres(connessione)
+    lezione = Lezione("l1", "Analisi 1", date(2026, 3, 5), "c")
+    repository.salva_lezione(lezione)
+    repository.salva_quadro_generale(lezione, "Quadro da conservare.")
+
+    assert repository.riavvia_elaborazione(lezione) == 0
+
+    riletta = repository.trova_lezione(lezione.materia, lezione.data)
+    assert riletta is not None and riletta.quadro_generale == "Quadro da conservare."
+
+
+def test_non_si_riavvia_una_lezione_con_registrazioni_ancora_in_lavorazione(
+    connessione: psycopg.Connection,
+) -> None:
+    repository = RepositoryPostgres(connessione)
+    lezione = _lezione_elaborata(repository, "l1", "r1")
+    in_corso = Registrazione(
+        "r2", lezione, "/a.ogg", stato=Stato.SEGMENTATA, trascrizione="testo"
+    )
+    repository.salva_registrazione(in_corso)
+
+    with pytest.raises(ElaborazioneInCorso, match="r2"):
+        repository.riavvia_elaborazione(lezione)
+
+    # Non è cambiato niente.
+    assert repository.capitoli_della_lezione(lezione) != []
+    assert {r.id: r.stato for r in repository.registrazioni_da_processare()} == {
+        "r2": Stato.SEGMENTATA
+    }
+
+
+def test_le_registrazioni_in_errore_si_possono_riavviare(
+    connessione: psycopg.Connection,
+) -> None:
+    repository = RepositoryPostgres(connessione)
+    lezione = Lezione("l1", "Analisi 1", date(2026, 3, 5), "c")
+    repository.salva_lezione(lezione)
+    repository.salva_registrazione(
+        Registrazione("r1", lezione, "/a.ogg", stato=Stato.ERRORE, trascrizione="t", tentativi=2)
+    )
+
+    assert repository.riavvia_elaborazione(lezione) == 1
+
+
+def test_capitoli_con_progresso_conta_quelli_con_uno_stato_diverso_da_da_studiare(
+    connessione: psycopg.Connection,
+) -> None:
+    repository = RepositoryPostgres(connessione)
+    lezione = _lezione_elaborata(repository, "l1", "r1", "r2")
+    assert repository.capitoli_con_progresso(lezione) == 0
+
+    with connessione.cursor() as cursore:
+        cursore.execute("UPDATE capitoli SET stato_comprensione = 'compreso' WHERE registrazione_id = 'r1'")
+    connessione.commit()
+
+    assert repository.capitoli_con_progresso(lezione) == 1

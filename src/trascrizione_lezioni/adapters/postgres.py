@@ -44,6 +44,10 @@ def scrittura(connessione: psycopg.Connection) -> Iterator[psycopg.Cursor[tuple[
         raise
 
 
+class ElaborazioneInCorso(Exception):
+    """Una Registrazione della Lezione è ancora in mano all'Orchestratore."""
+
+
 class RepositoryPostgres:
     def __init__(self, connessione: psycopg.Connection) -> None:
         self._connessione = connessione
@@ -174,6 +178,73 @@ class RepositoryPostgres:
             )
             for registrazione_id, posizione, titolo, testo, appunti in righe
         ]
+
+    def capitoli_con_progresso(self, lezione: Lezione) -> int:
+        """Quanti Capitoli della Lezione hanno uno Stato di comprensione scelto dal fratello."""
+        with self._connessione.cursor() as cursore:
+            cursore.execute(
+                """
+                SELECT count(*) FROM capitoli c
+                JOIN registrazioni r ON r.id = c.registrazione_id
+                WHERE r.lezione_id = %s AND c.stato_comprensione <> 'da_studiare'
+                """,
+                (lezione.id,),
+            )
+            (quanti,) = cursore.fetchone() or (0,)
+        self._connessione.rollback()
+        return int(quanti)
+
+    def riavvia_elaborazione(self, lezione: Lezione) -> int:
+        """Rifà da capo segmentazione, Appunti e archiviazione di una Lezione, partendo dalle
+        Trascrizioni già salvate (che non si toccano). Le Registrazioni senza Trascrizione,
+        ancora da trascrivere, restano dove sono. Restituisce quante ne ha riavviate.
+
+        Attenzione: i Capitoli si ricreano, quindi lo Stato di comprensione si perde
+        (vedi `capitoli_con_progresso`). Solleva ElaborazioneInCorso se l'Orchestratore sta
+        ancora lavorando su una Registrazione della Lezione."""
+        with scrittura(self._connessione) as cursore:
+            # Il blocco delle righe impedisce all'Orchestratore di avanzarle mentre si controlla.
+            cursore.execute(
+                """
+                SELECT id, stato FROM registrazioni
+                WHERE lezione_id = %s AND trascrizione IS NOT NULL
+                ORDER BY creato_il FOR UPDATE
+                """,
+                (lezione.id,),
+            )
+            in_lavorazione = [
+                str(id_)
+                for id_, stato in cursore.fetchall()
+                if stato in ("trascritta", "segmentata", "elaborata", "archiviata")
+            ]
+            if in_lavorazione:
+                raise ElaborazioneInCorso(
+                    "Registrazioni ancora in lavorazione: " + ", ".join(in_lavorazione)
+                )
+            cursore.execute(
+                """
+                DELETE FROM capitoli WHERE registrazione_id IN (
+                    SELECT id FROM registrazioni WHERE lezione_id = %s AND trascrizione IS NOT NULL
+                )
+                """,
+                (lezione.id,),
+            )
+            cursore.execute(
+                """
+                UPDATE registrazioni
+                SET stato = 'trascritta', tentativi = 0, percorso_appunti = NULL,
+                    aggiornato_il = now()
+                WHERE lezione_id = %s AND trascrizione IS NOT NULL
+                """,
+                (lezione.id,),
+            )
+            riavviate = cursore.rowcount
+            if riavviate:
+                cursore.execute(
+                    "UPDATE lezioni SET quadro_generale = NULL, aggiornato_il = now() WHERE id = %s",
+                    (lezione.id,),
+                )
+        return riavviate
 
     def registrazioni_da_processare(self) -> list[Registrazione]:
         with self._connessione.cursor() as cursore:
