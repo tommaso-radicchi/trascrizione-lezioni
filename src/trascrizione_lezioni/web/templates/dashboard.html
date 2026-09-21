@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% import "_componenti.html" as c %}
+{% block titolo %}Studio{% endblock %}
+{% block contenuto %}
+<h1 class="titolo-pagina">Studio</h1>
+<p class="data-oggi">{{ oggi|data_estesa }}</p>
+
+{% if ripasso %}
+<section id="da-ripassare" class="ripasso" aria-labelledby="t-ripasso">
+  <h2 id="t-ripasso">Da ripassare <span class="conteggio">{{ ripasso|length }}</span></h2>
+  <ul class="elenco-ripasso">
+    {% for voce in ripasso %}
+    <li style="--tinta: {{ voce.materia|colore_materia }}">
+      <a href="/capitolo/{{ voce.capitolo.registrazione_id }}/{{ voce.capitolo.posizione }}">
+        <span class="titolo">{{ voce.capitolo.titolo }}</span>
+        <span class="meta">{{ voce.materia }} · {{ voce.data|data_breve }}</span>
+      </a>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+<section id="materie" aria-label="Materie" class="schede">
+  {% for r in riepiloghi %}
+  <article class="scheda" data-materia="{{ r.materia }}" style="--tinta: {{ r.materia|colore_materia }}">
+    <h2><a href="/materia/{{ r.materia|quota }}">{{ r.materia }}</a></h2>
+    {% if r.totale %}
+      {{ c.barra(r.contatori) }}
+      {{ c.contatori_testo(r.contatori) }}
+      <p class="ultima">Ultima lezione: {{ r.ultima_lezione|data_breve }}</p>
+      {% if r.continua %}
+      <a class="continua" href="/capitolo/{{ r.continua.registrazione_id }}/{{ r.continua.posizione }}">Continua<span class="sotto">{{ r.continua.titolo }}</span></a>
+      {% else %}
+      <p class="tutto-compreso"><span aria-hidden="true">●</span> Tutto compreso</p>
+      {% endif %}
+    {% else %}
+      <p class="vuota">Nessuna lezione ancora</p>
+    {% endif %}
+  </article>
+  {% endfor %}
+</section>
+{% endblock %}

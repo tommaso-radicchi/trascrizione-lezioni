@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import AbstractContextManager, contextmanager
 from datetime import date
 
 import psycopg
@@ -31,21 +31,25 @@ _STATO_A_TESTO: dict[Stato, str] = {
 _TESTO_A_STATO: dict[str, Stato] = {testo: stato for stato, testo in _STATO_A_TESTO.items()}
 
 
+@contextmanager
+def scrittura(connessione: psycopg.Connection) -> Iterator[psycopg.Cursor[tuple[object, ...]]]:
+    """Un cursore in una transazione: commit se va bene, rollback se fallisce, così
+    un errore non lascia la connessione in una transazione abortita."""
+    try:
+        with connessione.cursor() as cursore:
+            yield cursore
+        connessione.commit()
+    except BaseException:
+        connessione.rollback()
+        raise
+
+
 class RepositoryPostgres:
     def __init__(self, connessione: psycopg.Connection) -> None:
         self._connessione = connessione
 
-    @contextmanager
-    def _scrittura(self) -> Iterator[psycopg.Cursor[tuple[object, ...]]]:
-        """Un cursore in una transazione: commit se va bene, rollback se fallisce, così
-        un errore non lascia la connessione condivisa in una transazione abortita."""
-        try:
-            with self._connessione.cursor() as cursore:
-                yield cursore
-            self._connessione.commit()
-        except BaseException:
-            self._connessione.rollback()
-            raise
+    def _scrittura(self) -> AbstractContextManager[psycopg.Cursor[tuple[object, ...]]]:
+        return scrittura(self._connessione)
 
     def trova_lezione(self, materia: str, data: date) -> Lezione | None:
         with self._connessione.cursor() as cursore:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import replace
 from datetime import date
 
 from ..dominio import (
@@ -14,7 +15,9 @@ from ..dominio import (
     PropostaCapitolo,
     Registrazione,
     Stato,
+    StatoComprensione,
 )
+from ..studio import DettaglioCapitolo, LezioneStudio
 
 
 class ControlloGpuFake:
@@ -174,3 +177,42 @@ class ClientTelegramFake:
 
     def conferma_ricezione(self, chat_id: str) -> None:
         self.conferme_inviate.append(chat_id)
+
+
+class LetturaStudioFake:
+    """Il modello di lettura del sito, in memoria: si costruisce già in forma di
+    Lezioni e Capitoli, con testo e Appunti per il dettaglio."""
+
+    def __init__(
+        self,
+        lezioni: list[LezioneStudio],
+        dettagli: dict[tuple[str, int], tuple[str, AppuntiCapitolo]] | None = None,
+    ) -> None:
+        self._lezioni = lezioni
+        self._dettagli = dettagli or {}
+
+    def lezioni(self) -> list[LezioneStudio]:
+        return sorted(self._lezioni, key=lambda lezione: (lezione.data, lezione.id))
+
+    def dettaglio_capitolo(
+        self, registrazione_id: str, posizione: int
+    ) -> DettaglioCapitolo | None:
+        for lezione in self._lezioni:
+            for capitolo in lezione.capitoli:
+                if capitolo.registrazione_id == registrazione_id and capitolo.posizione == posizione:
+                    testo, appunti = self._dettagli.get(
+                        (registrazione_id, posizione),
+                        (f"testo di {capitolo.titolo}", AppuntiCapitolo(riassunto=capitolo.titolo)),
+                    )
+                    return DettaglioCapitolo(lezione, capitolo, testo, appunti)
+        return None
+
+    def imposta_stato(
+        self, registrazione_id: str, posizione: int, stato: StatoComprensione
+    ) -> bool:
+        for lezione in self._lezioni:
+            for indice, capitolo in enumerate(lezione.capitoli):
+                if capitolo.registrazione_id == registrazione_id and capitolo.posizione == posizione:
+                    lezione.capitoli[indice] = replace(capitolo, stato=stato)
+                    return True
+        return False

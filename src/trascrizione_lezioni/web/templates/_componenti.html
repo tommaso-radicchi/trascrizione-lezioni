@@ -1,0 +1,22 @@
+{# Barra segmentata: larghezze proporzionali ai Capitoli esistenti, nessun totale del corso. #}
+{% macro barra(contatori) %}
+  {% set segmenti = barra_segmentata(contatori) %}
+  {% if segmenti %}
+  <div class="barra" role="img"
+       aria-label="{% for stato in ORDINE_STATI %}{% if contatori[stato] %}{{ testo_contatore(stato, contatori[stato]) }}{% if not loop.last %}, {% endif %}{% endif %}{% endfor %}">
+    {% for s in segmenti %}<span class="segmento st-{{ s.stato.value }}" style="width: {{ s.percentuale }}%"></span>{% endfor %}
+  </div>
+  {% endif %}
+{% endmacro %}
+
+{% macro contatori_testo(contatori) %}
+  <ul class="contatori">
+    {% for stato in ORDINE_STATI %}
+    <li class="st-{{ stato.value }}{% if not contatori[stato] %} zero{% endif %}"><span class="icona" aria-hidden="true">{{ ETICHETTE_STATO[stato][1] }}</span> {{ testo_contatore(stato, contatori[stato]) }}</li>
+    {% endfor %}
+  </ul>
+{% endmacro %}
+
+{% macro badge(stato) %}
+  <span class="badge st-{{ stato.value }}"><span class="icona" aria-hidden="true">{{ ETICHETTE_STATO[stato][1] }}</span> {{ ETICHETTE_STATO[stato][0] }}</span>
+{% endmacro %}

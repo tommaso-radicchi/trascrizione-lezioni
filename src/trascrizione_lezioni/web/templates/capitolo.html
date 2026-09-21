@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block titolo %}{{ d.capitolo.titolo }}{% endblock %}
+{% block contenuto %}
+{% set a = d.appunti %}
+<article class="lettura" style="--tinta: {{ d.lezione.materia|colore_materia }}">
+  <a class="indietro" href="/materia/{{ d.lezione.materia|quota }}">← {{ d.lezione.materia }} · {{ d.lezione.data|data_breve }}</a>
+  {% include "_timeline.html" %}
+  <h1 class="titolo-pagina">{{ d.capitolo.titolo }}</h1>
+
+  <div class="vista">
+    <input class="scheda-input" type="radio" name="vista" id="v-appunti" checked>
+    <input class="scheda-input" type="radio" name="vista" id="v-trascrizione">
+    <div class="schede-vista" role="presentation">
+      <label for="v-appunti">Appunti</label>
+      <label for="v-trascrizione">Trascrizione</label>
+    </div>
+
+    <div class="pannelli">
+      <section class="pannello-appunti" aria-label="Appunti">
+        <h2>Riassunto</h2>
+        <p>{{ a.riassunto }}</p>
+
+        {% if a.punti_chiave %}
+        <h2>Punti chiave</h2>
+        <ul>{% for p in a.punti_chiave %}<li>{{ p }}</li>{% endfor %}</ul>
+        {% endif %}
+
+        {% if a.termini %}
+        <h2>Termini</h2>
+        <ul>{% for t in a.termini %}<li><strong>{{ t.termine }}</strong>: {{ t.definizione }}</li>{% endfor %}</ul>
+        {% endif %}
+
+        {% if a.da_ripassare %}
+        <h2>Da ripassare</h2>
+        <ul class="evidenza">{% for p in a.da_ripassare %}<li>{{ p }}</li>{% endfor %}</ul>
+        {% endif %}
+
+        {% if a.domande %}
+        <h2>Domande</h2>
+        {% for q in a.domande %}
+        <details class="domanda">
+          <summary>{{ q.domanda }}</summary>
+          <p>{{ q.risposta }}</p>
+        </details>
+        {% endfor %}
+        {% endif %}
+      </section>
+
+      <section class="pannello-trascrizione" aria-label="Trascrizione originale">
+        <h2>Trascrizione originale</h2>
+        <p class="testo-originale">{{ d.testo }}</p>
+      </section>
+    </div>
+  </div>
+
+  <h2 class="titolo-stato">Come va con questo capitolo?</h2>
+  {% include "_stato.html" %}
+
+  <nav class="sfoglia" aria-label="Altri capitoli">
+    {% if precedente %}
+    <a class="passo-nav" rel="prev" href="/capitolo/{{ precedente.registrazione_id }}/{{ precedente.posizione }}">← Precedente<span class="sotto">{{ precedente.titolo }}</span></a>
+    {% else %}<span></span>{% endif %}
+    {% if successivo %}
+    <a class="passo-nav destra" rel="next" href="/capitolo/{{ successivo.registrazione_id }}/{{ successivo.posizione }}">Successivo →<span class="sotto">{{ successivo.titolo }}</span></a>
+    {% else %}
+    <a class="passo-nav destra" href="/materia/{{ d.lezione.materia|quota }}">Torna a {{ d.lezione.materia }}<span class="sotto">Fine della lezione</span></a>
+    {% endif %}
+  </nav>
+</article>
+{% endblock %}

@@ -20,6 +20,15 @@ class Stato(Enum):
     ERRORE = auto()
 
 
+class StatoComprensione(Enum):
+    """Lo stato di un Capitolo, scelto a mano dal fratello (CONTEXT.md -> Stato di comprensione)."""
+
+    DA_STUDIARE = "da_studiare"
+    IN_CORSO = "in_corso"
+    COMPRESO = "compreso"
+    DA_RIPASSARE = "da_ripassare"
+
+
 @dataclass
 class Lezione:
     """Materia + giorno: raccoglie tutte le Registrazioni della stessa sessione."""

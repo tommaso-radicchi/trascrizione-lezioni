@@ -1,0 +1,8 @@
+<div id="stato-selettore" class="stato-selettore" role="group" aria-label="Stato di comprensione">
+  {% for stato in STATI_SELETTORE %}
+  {% set url = "/capitolo/" ~ d.capitolo.registrazione_id ~ "/" ~ d.capitolo.posizione ~ "/stato/" ~ stato.value %}
+  <form method="post" action="{{ url }}" hx-post="{{ url }}" hx-target="#stato-selettore" hx-swap="outerHTML">
+    <button type="submit" class="st-{{ stato.value }}" aria-pressed="{{ 'true' if stato == d.capitolo.stato else 'false' }}"><span class="icona" aria-hidden="true">{{ ETICHETTE_STATO[stato][1] }}</span> {{ ETICHETTE_STATO[stato][0] }}</button>
+  </form>
+  {% endfor %}
+</div>

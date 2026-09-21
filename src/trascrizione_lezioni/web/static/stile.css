@@ -1,0 +1,403 @@
+/* Sito di studio: mobile-first (iPhone in verticale), si allarga su schermi grandi.
+   Gli stati di comprensione si riconoscono da icona e testo, non solo dal colore. */
+
+:root {
+  color-scheme: light dark;
+  --sfondo: #f5f4f0;
+  --superficie: #ffffff;
+  --testo: #1c1d20;
+  --testo-2: #5b5f66;
+  --bordo: #e2e0da;
+  --su-accento: #ffffff;
+  --accento: hsl(220 55% 34%);
+  --st-da_studiare: #6b7280;
+  --st-in_corso: #b45309;
+  --st-compreso: #15803d;
+  --st-da_ripassare: #7c3aed;
+  --raggio: 14px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --sfondo: #17181b;
+    --superficie: #202226;
+    --testo: #ececee;
+    --testo-2: #a3a7ae;
+    --bordo: #33363c;
+    --su-accento: #101114;
+    --accento: hsl(220 65% 70%);
+    --st-da_studiare: #9ca3af;
+    --st-in_corso: #fbbf24;
+    --st-compreso: #4ade80;
+    --st-da_ripassare: #a78bfa;
+  }
+}
+
+/* --accento va ricalcolata dove si imposta --tinta (una var() nel :root si risolverebbe
+   una volta sola, prima che le Materie definiscano la propria tinta). */
+[style*="--tinta"] { --accento: hsl(var(--tinta) 55% 34%); }
+@media (prefers-color-scheme: dark) {
+  [style*="--tinta"] { --accento: hsl(var(--tinta) 65% 70%); }
+}
+
+.st-da_studiare { --c: var(--st-da_studiare); }
+.st-in_corso { --c: var(--st-in_corso); }
+.st-compreso { --c: var(--st-compreso); }
+.st-da_ripassare { --c: var(--st-da_ripassare); }
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--sfondo);
+  color: var(--testo);
+  font: 17px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
+    env(safe-area-inset-left);
+}
+
+main {
+  min-width: 0;
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 0 16px 4rem;
+}
+
+main:has(.lettura) { max-width: 72rem; }
+
+a { color: inherit; }
+
+:focus-visible {
+  outline: 3px solid var(--accento);
+  outline-offset: 2px;
+}
+
+.salta {
+  position: absolute;
+  left: 8px;
+  top: -4rem;
+  background: var(--superficie);
+  padding: 8px 12px;
+  border-radius: 8px;
+  z-index: 10;
+}
+.salta:focus { top: 8px; }
+
+.testata { max-width: 72rem; margin: 0 auto; padding: 14px 16px 0; }
+.marchio {
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  text-decoration: none;
+  color: var(--testo-2);
+}
+
+.titolo-pagina { font-size: 1.9rem; line-height: 1.2; margin: 0.6rem 0 0.2rem; }
+.titolo-pagina.materia { color: var(--accento); }
+.data-oggi { margin: 0 0 1.4rem; color: var(--testo-2); }
+.data-oggi::first-letter { text-transform: uppercase; }
+.indietro { display: inline-block; margin-top: 0.4rem; color: var(--testo-2); text-decoration: none; }
+
+/* ---------- barra e contatori ---------- */
+
+.barra {
+  display: flex;
+  gap: 2px;
+  height: 10px;
+  margin: 12px 0 10px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--bordo);
+}
+.segmento { display: block; height: 100%; background: var(--c); min-width: 6px; }
+
+.contatori {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.88rem;
+  color: var(--testo-2);
+}
+.contatori .icona { color: var(--c); font-weight: 700; }
+.contatori .zero { opacity: 0.55; }
+
+.badge { font-size: 0.78rem; font-weight: 600; color: var(--c); white-space: nowrap; }
+
+/* ---------- dashboard ---------- */
+
+.schede { display: grid; gap: 12px; }
+
+.scheda {
+  background: var(--superficie);
+  border: 1px solid var(--bordo);
+  border-left: 5px solid var(--accento);
+  border-radius: var(--raggio);
+  padding: 14px 16px 16px;
+}
+.scheda h2 { margin: 0; font-size: 1.2rem; }
+.scheda h2 a { text-decoration: none; }
+.scheda h2 a:hover { text-decoration: underline; }
+.ultima { margin: 10px 0 0; font-size: 0.85rem; color: var(--testo-2); }
+.vuota, .tutto-compreso { margin: 10px 0 0; color: var(--testo-2); }
+.tutto-compreso { color: var(--st-compreso); font-weight: 600; }
+
+.continua {
+  display: block;
+  margin-top: 12px;
+  padding: 12px 16px;
+  min-height: 48px;
+  border-radius: 12px;
+  background: var(--accento);
+  color: var(--su-accento);
+  font-weight: 700;
+  text-decoration: none;
+}
+.continua .sotto {
+  display: block;
+  font-weight: 400;
+  font-size: 0.85rem;
+  opacity: 0.92;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ripasso {
+  margin-bottom: 20px;
+  padding: 14px 16px 6px;
+  background: var(--superficie);
+  border: 1px solid var(--bordo);
+  border-left: 5px solid var(--st-da_ripassare);
+  border-radius: var(--raggio);
+}
+.ripasso h2 { margin: 0 0 4px; font-size: 1.05rem; }
+.conteggio {
+  display: inline-block;
+  min-width: 1.6em;
+  padding: 0 0.5em;
+  border-radius: 999px;
+  background: var(--st-da_ripassare);
+  color: var(--su-accento);
+  font-size: 0.8rem;
+  text-align: center;
+}
+.elenco-ripasso { list-style: none; margin: 0; padding: 0; }
+.elenco-ripasso li { border-top: 1px solid var(--bordo); }
+.elenco-ripasso li:first-child { border-top: 0; }
+.elenco-ripasso a {
+  display: block;
+  padding: 10px 0;
+  min-height: 48px;
+  text-decoration: none;
+}
+.elenco-ripasso .titolo { display: block; font-weight: 600; }
+.elenco-ripasso .meta { display: block; font-size: 0.85rem; color: var(--accento); }
+
+/* ---------- hub della materia ---------- */
+
+.lezione {
+  margin-top: 16px;
+  background: var(--superficie);
+  border: 1px solid var(--bordo);
+  border-radius: var(--raggio);
+}
+.lezione summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 8px 16px;
+  cursor: pointer;
+  font-weight: 700;
+}
+.lezione .conto { font-weight: 400; font-size: 0.85rem; color: var(--testo-2); }
+.quadro { margin: 0; padding: 0 16px 8px; color: var(--testo-2); font-size: 0.95rem; }
+.capitoli { list-style: none; margin: 0; padding: 0 8px 8px; }
+.capitolo {
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 56px;
+  margin-top: 6px;
+  padding: 8px 12px;
+  border-left: 4px solid var(--c);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--c) 9%, transparent);
+  text-decoration: none;
+}
+.capitolo .numero { font-weight: 700; color: var(--c); }
+.capitolo .titolo { font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
+
+/* ---------- lettura ---------- */
+
+.timeline { overflow-x: auto; margin: 10px -16px 4px; padding: 6px 16px; }
+.timeline ol { display: flex; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.passo {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 2px solid var(--c);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--c) 14%, transparent);
+  font-weight: 700;
+  text-decoration: none;
+}
+.passo[aria-current="page"] { background: var(--c); color: var(--su-accento); }
+
+.lettura .titolo-pagina { margin-top: 0.8rem; }
+
+.scheda-input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+.schede-vista {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 4px;
+  margin: 14px 0;
+  padding: 4px;
+  border-radius: 12px;
+  background: var(--bordo);
+}
+.schede-vista label {
+  display: grid;
+  place-items: center;
+  min-height: 44px;
+  border-radius: 9px;
+  font-weight: 600;
+  cursor: pointer;
+}
+#v-appunti:checked ~ .schede-vista label[for="v-appunti"],
+#v-trascrizione:checked ~ .schede-vista label[for="v-trascrizione"] {
+  background: var(--superficie);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.18);
+}
+#v-appunti:focus-visible ~ .schede-vista label[for="v-appunti"],
+#v-trascrizione:focus-visible ~ .schede-vista label[for="v-trascrizione"] {
+  outline: 3px solid var(--accento);
+}
+#v-appunti:checked ~ .pannelli .pannello-trascrizione { display: none; }
+#v-trascrizione:checked ~ .pannelli .pannello-appunti { display: none; }
+
+.pannello-appunti h2, .pannello-trascrizione h2 {
+  margin: 1.7rem 0 0.5rem;
+  font-size: 0.8rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--testo-2);
+}
+.pannello-appunti h2:first-child, .pannello-trascrizione h2:first-child { margin-top: 0.4rem; }
+.pannello-appunti p { margin: 0; }
+.pannello-appunti ul { margin: 0; padding-left: 1.2rem; }
+.pannello-appunti li { margin: 0.35rem 0; }
+.evidenza {
+  list-style: none;
+  padding: 0 !important;
+}
+.evidenza li {
+  padding: 8px 12px;
+  border-left: 4px solid var(--st-da_ripassare);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--st-da_ripassare) 10%, transparent);
+}
+
+.domanda {
+  margin: 8px 0;
+  background: var(--superficie);
+  border: 1px solid var(--bordo);
+  border-radius: 12px;
+}
+.domanda summary { min-height: 48px; padding: 12px 14px; cursor: pointer; font-weight: 600; }
+.domanda p { padding: 0 14px 14px; color: var(--testo-2); }
+
+.testo-originale {
+  margin: 0;
+  white-space: pre-wrap;
+  color: var(--testo-2);
+  font-size: 0.95rem;
+  line-height: 1.75;
+}
+
+.titolo-stato {
+  margin: 2rem 0 0.6rem;
+  font-size: 0.8rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--testo-2);
+}
+.stato-selettore { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+.stato-selettore form { display: contents; }
+.stato-selettore button {
+  width: 100%;
+  min-height: 50px;
+  padding: 8px 10px;
+  border: 2px solid var(--c);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--testo);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.stato-selettore button[aria-pressed="true"] { background: var(--c); color: var(--su-accento); }
+
+.sfoglia { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; margin-top: 22px; }
+.passo-nav {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  min-height: 60px;
+  padding: 10px 14px;
+  background: var(--superficie);
+  border: 1px solid var(--bordo);
+  border-radius: 12px;
+  font-weight: 700;
+  text-decoration: none;
+}
+.passo-nav.destra { text-align: right; }
+.passo-nav .sotto {
+  display: block;
+  font-weight: 400;
+  font-size: 0.82rem;
+  color: var(--testo-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- schermi larghi: appunti e trascrizione affiancati ---------- */
+
+@media (min-width: 62rem) {
+  .schede { grid-template-columns: repeat(2, 1fr); }
+  .schede-vista { display: none; }
+  .pannelli { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 40px; margin-top: 12px; }
+  #v-appunti:checked ~ .pannelli .pannello-trascrizione,
+  #v-trascrizione:checked ~ .pannelli .pannello-appunti { display: block; }
+  .pannello-trascrizione {
+    position: sticky;
+    top: 16px;
+    align-self: start;
+    max-height: calc(100vh - 32px);
+    overflow: auto;
+    padding: 4px 20px 16px;
+    background: var(--superficie);
+    border: 1px solid var(--bordo);
+    border-radius: var(--raggio);
+  }
+  .stato-selettore { grid-template-columns: repeat(4, 1fr); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { scroll-behavior: auto !important; transition: none !important; }
+}

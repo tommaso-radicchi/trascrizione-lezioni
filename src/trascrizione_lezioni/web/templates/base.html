@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#f5f4f0" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#17181b" media="(prefers-color-scheme: dark)">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Studio">
+  <title>{% block titolo %}Studio{% endblock %}</title>
+  <link rel="stylesheet" href="/static/stile.css">
+  <script src="/static/htmx.min.js" defer></script>
+</head>
+<body>
+  <a class="salta" href="#contenuto">Vai al contenuto</a>
+  <header class="testata">
+    <a class="marchio" href="/">Studio</a>
+  </header>
+  <main id="contenuto">
+    {% block contenuto %}{% endblock %}
+  </main>
+</body>
+</html>
