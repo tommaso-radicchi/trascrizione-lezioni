@@ -158,13 +158,13 @@ class RepositoryFake:
 
 class ClientTelegramFake:
     def __init__(self) -> None:
-        self.appunti_inviati: list[tuple[Lezione, str]] = []
+        self.notifiche_appunti: list[tuple[Lezione, list[str]]] = []
         self.errori_notificati: list[tuple[Lezione, str]] = []
         self.materie_richieste: list[tuple[str, list[str]]] = []
         self.conferme_inviate: list[str] = []
 
-    def invia_appunti(self, lezione: Lezione, percorso_appunti: str) -> None:
-        self.appunti_inviati.append((lezione, percorso_appunti))
+    def notifica_appunti(self, lezione: Lezione, titoli_nuovi: list[str]) -> None:
+        self.notifiche_appunti.append((lezione, list(titoli_nuovi)))
 
     def notifica_errore(self, lezione: Lezione, messaggio: str) -> None:
         self.errori_notificati.append((lezione, messaggio))

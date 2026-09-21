@@ -16,8 +16,8 @@ import httpx
 
 from ..dominio import Lezione
 from ..ingest import GestoreIngest
+from ..notifica import componi_notifica
 
-LIMITE_MESSAGGIO_TELEGRAM = 4000
 API_BASE_URL_DEFAULT = "https://api.telegram.org"
 PREFISSO_DIR_CONTAINER_LOCALE = "/var/lib/telegram-bot-api"
 
@@ -40,12 +40,8 @@ class ClientTelegramReale:
         self._cartella_file_locale = cartella_file_locale
         self._client = httpx.Client(timeout=timeout)
 
-    def invia_appunti(self, lezione: Lezione, percorso_appunti: str) -> None:
-        contenuto = Path(percorso_appunti).read_text(encoding="utf-8")
-        if len(contenuto) <= LIMITE_MESSAGGIO_TELEGRAM:
-            self._invia_messaggio(lezione.chat_id, contenuto)
-        else:
-            self._invia_documento(lezione.chat_id, Path(percorso_appunti))
+    def notifica_appunti(self, lezione: Lezione, titoli_nuovi: list[str]) -> None:
+        self._invia_messaggio(lezione.chat_id, componi_notifica(lezione, titoli_nuovi))
 
     def notifica_errore(self, lezione: Lezione, messaggio: str) -> None:
         testo = f"⚠️ Errore sulla Lezione di {lezione.materia} del {lezione.data}: {messaggio}"
@@ -82,14 +78,6 @@ class ClientTelegramReale:
             f"{self._base_url}/sendMessage",
             json={"chat_id": chat_id, "text": testo},
         ).raise_for_status()
-
-    def _invia_documento(self, chat_id: str, percorso: Path) -> None:
-        with percorso.open("rb") as file_appunti:
-            self._client.post(
-                f"{self._base_url}/sendDocument",
-                data={"chat_id": chat_id},
-                files={"document": (percorso.name, file_appunti, "text/markdown")},
-            ).raise_for_status()
 
     def scarica_audio(self, file_id: str, cartella_destinazione: Path) -> str:
         risposta = self._client.get(f"{self._base_url}/getFile", params={"file_id": file_id})

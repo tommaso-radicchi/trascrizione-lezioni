@@ -32,7 +32,7 @@ def test_una_registrazione_arriva_a_notificata_attraversando_tutti_gli_stati() -
     registrazione_finale = ambiente.repository.registrazioni()[0]
     assert registrazione_finale.stato is Stato.NOTIFICATA
     assert ambiente.archivio.salvati
-    assert ambiente.client_telegram.appunti_inviati
+    assert ambiente.client_telegram.notifiche_appunti
 
 
 def test_un_job_non_viene_dispacciato_se_la_gpu_e_occupata() -> None:
@@ -403,4 +403,53 @@ def test_non_si_archivia_mai_un_file_senza_capitoli_elaborati() -> None:
 
     assert ambiente.archivio.salvati == {}
     assert registrazione.stato is Stato.ELABORATA
+    assert registrazione.tentativi == 1
+
+
+def test_arriva_una_notifica_per_registrazione_con_i_soli_titoli_dei_suoi_capitoli() -> None:
+    ambiente = Ambiente()
+    lezione = crea_lezione()
+    r1 = _registrazione_segmentata(ambiente, "r1", lezione, "Insiemi", "Funzioni")
+
+    for _ in range(3):  # SEGMENTATA -> ELABORATA -> ARCHIVIATA -> NOTIFICATA
+        ambiente.orchestratore.elabora_coda()
+
+    assert r1.stato is Stato.NOTIFICATA
+    assert ambiente.client_telegram.notifiche_appunti == [(lezione, ["Insiemi", "Funzioni"])]
+
+    _registrazione_segmentata(ambiente, "r2", lezione, "Limiti")
+    for _ in range(3):
+        ambiente.orchestratore.elabora_coda()
+
+    assert ambiente.client_telegram.notifiche_appunti == [
+        (lezione, ["Insiemi", "Funzioni"]),
+        (lezione, ["Limiti"]),
+    ]
+
+
+def test_la_notifica_parte_solo_dopo_l_archiviazione() -> None:
+    ambiente = Ambiente()
+    lezione = crea_lezione()
+    _registrazione_segmentata(ambiente, "r1", lezione, "Insiemi")
+
+    ambiente.orchestratore.elabora_coda()  # ELABORATA
+    ambiente.orchestratore.elabora_coda()  # ARCHIVIATA
+    assert ambiente.client_telegram.notifiche_appunti == []
+    assert ambiente.archivio.salvati
+
+    ambiente.orchestratore.elabora_coda()  # NOTIFICATA
+    assert len(ambiente.client_telegram.notifiche_appunti) == 1
+
+
+def test_una_notifica_fallita_viene_ritentata_senza_riarchiviare() -> None:
+    class TelegramGiu(ClientTelegramFake):
+        def notifica_appunti(self, lezione: Lezione, titoli: list[str]) -> None:
+            raise ConnectionError("Telegram non raggiungibile")
+
+    ambiente = Ambiente(client_telegram=TelegramGiu())
+    registrazione = _registrazione_segmentata(ambiente, "r1", crea_lezione(), "Insiemi")
+    for _ in range(3):
+        ambiente.orchestratore.elabora_coda()
+
+    assert ambiente.repository.registrazioni()[0].stato is Stato.ARCHIVIATA
     assert registrazione.tentativi == 1

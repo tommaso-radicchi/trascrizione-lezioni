@@ -83,8 +83,12 @@ class Orchestratore:
             registrazione.percorso_appunti = self._archivia(registrazione)
             registrazione.stato = Stato.ARCHIVIATA
         elif registrazione.stato is Stato.ARCHIVIATA:
-            assert registrazione.percorso_appunti is not None
-            self._client_telegram.invia_appunti(lezione, registrazione.percorso_appunti)
+            titoli_nuovi = [
+                capitolo.titolo
+                for capitolo in self._repository.capitoli_della_lezione(lezione)
+                if capitolo.registrazione_id == registrazione.id
+            ]
+            self._client_telegram.notifica_appunti(lezione, titoli_nuovi)
             registrazione.stato = Stato.NOTIFICATA
 
     def _genera_appunti(self, registrazione: Registrazione) -> None:
