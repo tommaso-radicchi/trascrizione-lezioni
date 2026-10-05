@@ -7,7 +7,7 @@ quindi deve puntare a un database dedicato (il cui nome finisce in `_test`)."""
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 
 import psycopg
 import pytest
@@ -446,3 +446,23 @@ def test_capitoli_con_progresso_conta_quelli_con_uno_stato_diverso_da_da_studiar
     connessione.commit()
 
     assert repository.capitoli_con_progresso(lezione) == 1
+
+
+def test_registrazioni_ferme_trova_solo_quelle_in_lavorazione_che_non_cambiano_da_tempo(
+    connessione: psycopg.Connection,
+) -> None:
+    repository = RepositoryPostgres(connessione)
+    salva(repository, crea_registrazione("ferma", data=date(2026, 3, 5)))
+    salva(repository, crea_registrazione("recente", data=date(2026, 3, 6)))
+    salva(repository, crea_registrazione("finita", data=date(2026, 3, 7), stato=Stato.NOTIFICATA))
+    with connessione.cursor() as cursore:
+        cursore.execute(
+            "UPDATE registrazioni SET aggiornato_il = now() - interval '13 hours' "
+            "WHERE id IN ('ferma', 'finita')"
+        )
+    connessione.commit()
+
+    ferme = repository.registrazioni_ferme(timedelta(hours=12))
+
+    assert [r.id for r in ferme] == ["ferma"]
+    assert connessione.info.transaction_status == psycopg.pq.TransactionStatus.IDLE

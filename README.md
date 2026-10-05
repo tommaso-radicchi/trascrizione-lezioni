@@ -41,6 +41,32 @@ Per avere il link al primo Capitolo nelle notifiche Telegram, metti in `.env` l'
 Sull'iPhone: installa l'app Tailscale, accedi con lo stesso account (o accetta l'invito a
 condividere il Mac Mini), apri l'indirizzo in Safari e usa "Aggiungi alla schermata Home".
 
+## Sorveglianza
+
+Ogni 5 minuti un timer systemd controlla che bot, Orchestratore e sito siano attivi, che il
+database risponda e che nessuna Registrazione sia ferma da più di 12 ore. Quando compare un
+problema, e quando tutto torna a posto, scrive all'admin su Telegram (una volta, non a ogni giro).
+
+Se il Mac Mini è spento o senza internet non può avvisare nessuno: per questo a ogni giro manda
+anche un battito a [Healthchecks.io](https://healthchecks.io). Se i battiti smettono di arrivare,
+è Healthchecks ad avvisarti da fuori.
+
+Setup, una volta sola:
+
+1. Su healthchecks.io (piano gratuito) crea un check con **Period 5 minuti** e **Grace 10 minuti**.
+2. In *Integrations* aggiungi **Telegram** e segui le istruzioni del loro bot.
+3. Copia il *Ping URL* del check in `.env` come `HEALTHCHECKS_PING_URL`.
+4. Installa il timer:
+
+```bash
+cp systemd/trascrizione-lezioni-sorveglianza.{service,timer} ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now trascrizione-lezioni-sorveglianza.timer
+```
+
+Per un giro a mano: `uv run python -m trascrizione_lezioni.sorveglianza`. Lo stato degli ultimi
+problemi notificati è in `~/.local/state/trascrizione-lezioni/sorveglianza.json`.
+
 ## Rielaborare una Lezione
 
 Dopo un cambio di formato o di prompt, o per una Lezione elaborata dal flusso vecchio:

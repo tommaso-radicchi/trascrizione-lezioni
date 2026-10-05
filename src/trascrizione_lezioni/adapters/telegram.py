@@ -51,7 +51,10 @@ class ClientTelegramReale:
 
     def notifica_stato_admin(self, messaggio: str) -> None:
         """Notifica non legata a una Lezione specifica (es. MSI irraggiungibile)."""
-        self._invia_messaggio(self._admin_chat_id, f"⚠️ {messaggio}")
+        self.invia_admin(f"⚠️ {messaggio}")
+
+    def invia_admin(self, testo: str) -> None:
+        self._invia_messaggio(self._admin_chat_id, testo)
 
     def chiedi_materia(self, chat_id: str, materie: list[str]) -> None:
         tastiera = {

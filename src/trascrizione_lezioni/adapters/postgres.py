@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from contextlib import AbstractContextManager, contextmanager
-from datetime import date
+from datetime import date, timedelta
 
 import psycopg
 
@@ -247,6 +247,13 @@ class RepositoryPostgres:
         return riavviate
 
     def registrazioni_da_processare(self) -> list[Registrazione]:
+        return self._registrazioni_in_lavorazione(ferme_da=None)
+
+    def registrazioni_ferme(self, da_almeno: timedelta) -> list[Registrazione]:
+        """Le Registrazioni in lavorazione che non cambiano da almeno `da_almeno`."""
+        return self._registrazioni_in_lavorazione(ferme_da=da_almeno)
+
+    def _registrazioni_in_lavorazione(self, ferme_da: timedelta | None) -> list[Registrazione]:
         with self._connessione.cursor() as cursore:
             cursore.execute(
                 """
@@ -256,8 +263,10 @@ class RepositoryPostgres:
                 FROM registrazioni r
                 JOIN lezioni l ON l.id = r.lezione_id
                 WHERE r.stato NOT IN ('notificata', 'errore')
+                  AND (%(ferme_da)s::interval IS NULL OR r.aggiornato_il < now() - %(ferme_da)s)
                 ORDER BY r.creato_il
-                """
+                """,
+                {"ferme_da": ferme_da},
             )
             righe = cursore.fetchall()
         # rollback, non commit: una SELECT non ha nulla da confermare, e su una
