@@ -1,0 +1,9 @@
+[Unit]
+Description=Trascrizione Lezioni - sorveglianza ogni 5 minuti
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=5min
+
+[Install]
+WantedBy=timers.target

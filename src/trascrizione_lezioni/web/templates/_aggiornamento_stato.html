@@ -1,0 +1,3 @@
+{# Risposta htmx al cambio di stato: il selettore aggiornato, più la linea del tempo fuori banda. #}
+{% include "_stato.html" %}
+{% with oob = true %}{% include "_timeline.html" %}{% endwith %}

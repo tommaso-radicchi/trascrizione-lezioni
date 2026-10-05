@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% import "_componenti.html" as c %}
+{% block titolo %}{{ materia }}{% endblock %}
+{% block contenuto %}
+<div style="--tinta: {{ materia|colore_materia }}">
+  <a class="indietro" href="/">← Studio</a>
+  <h1 class="titolo-pagina materia">{{ materia }}</h1>
+  {% include "_sezioni.html" %}
+
+  {% if riepilogo.totale %}
+    {{ c.barra(riepilogo.contatori) }}
+    {{ c.contatori_testo(riepilogo.contatori) }}
+    {% if riepilogo.continua %}
+    <a class="continua" href="/capitolo/{{ riepilogo.continua.registrazione_id }}/{{ riepilogo.continua.posizione }}">Continua<span class="sotto">{{ riepilogo.continua.titolo }}</span></a>
+    {% endif %}
+  {% else %}
+    <p class="vuota">Nessuna lezione ancora</p>
+  {% endif %}
+
+  {% for lezione in lezioni %}
+  <details class="lezione"{% if loop.first %} open{% endif %}>
+    <summary>
+      <span class="data">{{ lezione.data|data_completa }}</span>
+      <span class="conto">{{ lezione.capitoli|length }} {{ 'argomento' if lezione.capitoli|length == 1 else 'argomenti' }}</span>
+    </summary>
+    {% if lezione.quadro_generale %}<p class="quadro">{{ lezione.quadro_generale }}</p>{% endif %}
+    <ol class="capitoli">
+      {% for capitolo in lezione.capitoli %}
+      <li>
+        <a class="capitolo st-{{ capitolo.stato.value }}" href="/capitolo/{{ capitolo.registrazione_id }}/{{ capitolo.posizione }}">
+          <span class="numero">{{ capitolo.numero }}</span>
+          <span class="titolo">{{ capitolo.titolo }}{% if capitolo.nuovo %} <span class="nuovo">Nuovo</span>{% endif %}</span>
+          {{ c.badge(capitolo.stato) }}
+        </a>
+      </li>
+      {% endfor %}
+    </ol>
+  </details>
+  {% endfor %}
+</div>
+{% endblock %}

@@ -1,0 +1,11 @@
+[Unit]
+Description=Trascrizione Lezioni - giro di sorveglianza (lanciato dal timer)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/tommy/Progetti/trascrizione-lezioni
+Environment=PATH=/home/tommy/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=/home/tommy/.local/bin/uv run python -m trascrizione_lezioni.sorveglianza
+TimeoutStartSec=120

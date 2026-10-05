@@ -1,0 +1,13 @@
+<nav id="timeline" class="timeline" aria-label="Capitoli della lezione"{% if oob %} hx-swap-oob="true"{% endif %}>
+  <ol>
+    {% for c in d.lezione.capitoli %}
+    <li>
+      <a class="passo st-{{ c.stato.value }}{% if c.nuovo %} nuovo{% endif %}" href="/capitolo/{{ c.registrazione_id }}/{{ c.posizione }}"
+         {% if c.numero == d.capitolo.numero %}aria-current="page"{% endif %}
+         aria-label="Capitolo {{ c.numero }}: {{ c.titolo }} ({{ ETICHETTE_STATO[c.stato][0] }}){% if c.nuovo %}, nuovo{% endif %}">
+        <span aria-hidden="true">{{ c.numero }}</span>
+      </a>
+    </li>
+    {% endfor %}
+  </ol>
+</nav>
